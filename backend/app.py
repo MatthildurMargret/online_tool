@@ -398,7 +398,8 @@ def get_income_dataframe(ticker: str):
     income_df = income_statement.to_dataframe()
     
     # Map periods to filing types by matching with actual filing dates
-    periods_list = list(income_statement.periods)
+    # Ensure periods is always a list
+    periods_list = list(income_statement.periods) if hasattr(income_statement.periods, '__iter__') else [income_statement.periods]
     
     # Get the period dates from each filing
     if filing_10q:
@@ -425,13 +426,13 @@ def get_income_dataframe(ticker: str):
         print("WARNING: Using fallback position-based matching")
         for i, period in enumerate(periods_list):
             if i == 0 and filing_10q:
-                filing_types[period] = "10-Q"
+                filing_types[str(period)] = "10-Q"
             elif i == 1 and filing_10k:
-                filing_types[period] = "10-K"
+                filing_types[str(period)] = "10-K"
             elif i == 0 and filing_10k:
-                filing_types[period] = "10-K"
+                filing_types[str(period)] = "10-K"
     
-    return income_df, c.name, income_statement.periods, filing_types
+    return income_df, c.name, periods_list, filing_types
 
 
 def get_all_financial_statements(ticker: str):
