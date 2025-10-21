@@ -1855,10 +1855,15 @@ def serve_static(filename):
 
 if __name__ == "__main__":
     init_db()
+    
+    # Get port from environment variable (for Railway/Render) or default to 5001
+    port = int(os.environ.get("PORT", 5001))
+    
     print("\n" + "="*60)
-    print("🚀 Edgar Income Statement Viewer")
+    print("🚀 Valuation Tool")
     print("="*60)
-    print(f"📊 Frontend: http://127.0.0.1:5001")
-    print(f"🔌 API: http://127.0.0.1:5001/api/income/<ticker>")
+    print(f"📊 Running on port {port}")
     print("="*60 + "\n")
-    app.run(debug=True, port=5001, host='127.0.0.1', threaded=True, use_reloader=False)
+    
+    # Use 0.0.0.0 to accept external connections (required for Railway/Render)
+    app.run(debug=False, port=port, host='0.0.0.0', threaded=True, use_reloader=False)
