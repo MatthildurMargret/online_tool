@@ -139,7 +139,8 @@ if ALPACA_API_KEY and ALPACA_SECRET_KEY:
     alpaca_client = StockHistoricalDataClient(ALPACA_API_KEY, ALPACA_SECRET_KEY)
 
 # Database setup
-DB_PATH = "cache.db"
+# Use absolute path to ensure cache.db is created in the correct location
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache.db")
 CACHE_DURATION_DAYS = 7
 STOCK_PRICE_CACHE_MINUTES = 5  # Cache stock prices for 5 minutes
 
