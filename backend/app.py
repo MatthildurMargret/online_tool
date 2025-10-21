@@ -553,20 +553,32 @@ def get_all_financial_statements(ticker: str):
 
 @app.route("/api/income/<ticker>", methods=["GET"])
 def get_income(ticker):
-    """API endpoint to get the most recent income statement"""
+    """API endpoint to get the most recent income statement - pulls from Supabase database"""
     try:
-        # Check cache first
-        cached = get_cached_data(ticker)
-        if cached:
-            cached = _clean_json_numbers(cached)
-            return jsonify({
-                "success": True,
-                "data": cached,
-                "cached": True
-            })
+        # Try to get from Supabase first
+        fin = get_company_financials(ticker.upper())
         
-        # Fetch from Edgar if not cached or expired
-        income_df, company_name, periods, filing_types = get_income_dataframe(ticker)
+        if not fin or not fin.get('raw_data'):
+            return jsonify({
+                "success": False,
+                "error": f"No data found for {ticker}. Please import data first."
+            }), 404
+        
+        # Parse the stored data
+        raw_payload = fin['raw_data']
+        if isinstance(raw_payload, str):
+            raw_payload = json.loads(raw_payload)
+        
+        income_stmt = raw_payload.get('income_statement', {})
+        periods = income_stmt.get('periods', [])
+        items = income_stmt.get('items', [])
+        company_name = fin.get('company_name', ticker.upper())
+        
+        if not periods or not items:
+            return jsonify({
+                "success": False,
+                "error": "No income statement data available"
+            }), 404
         
         if not periods or len(periods) == 0:
             return jsonify({
@@ -574,46 +586,20 @@ def get_income(ticker):
                 "error": "No data available"
             }), 404
         
-        # Sort periods by date (most recent first)
-        sorted_periods = sorted(periods, key=lambda x: x, reverse=True)
-        
-        # Convert to list of dictionaries with multiple periods
-        result_data = []
-        for _, row in income_df.iterrows():
-            item = {
-                "label": row["label"],
-                "concept": row["concept"],
-                "values": {}
-            }
-            # Add value for each period
-            for period in sorted_periods:
-                if period in row:
-                    item["values"][period] = _safe_number(row[period])
-            result_data.append(item)
-        
-        # Create period metadata with filing types
-        period_metadata = []
-        for period in sorted_periods:
-            period_metadata.append({
-                "date": period,
-                "type": filing_types.get(period, "Unknown")
-            })
-        
+        # Data is already in the right format from database
         response_data = {
             "ticker": ticker.upper(),
             "company_name": company_name,
-            "periods": sorted_periods,  # List of all periods (most recent first)
-            "period_metadata": period_metadata,  # Metadata about each period
-            "items": result_data
+            "periods": periods,
+            "period_metadata": income_stmt.get('period_metadata', []),
+            "items": items
         }
         
-        # Cache the result
         response_data = _clean_json_numbers(response_data)
-        cache_data(ticker, response_data)
         return jsonify({
             "success": True,
             "data": response_data,
-            "cached": False
+            "from_database": True
         })
     
     except Exception as e:
