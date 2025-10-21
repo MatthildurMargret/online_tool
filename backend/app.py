@@ -384,26 +384,27 @@ def get_income_dataframe(ticker: str):
     c = Company(ticker)
     
     # Get latest annual (10-K) and quarterly (10-Q) filings
+    # Note: We get Filings objects (not individual Filing), then combine them
     try:
-        filing_10k = c.get_filings(form="10-K").latest(1)
+        filings_10k = c.get_filings(form="10-K").latest(1)
     except:
-        filing_10k = None
+        filings_10k = None
     
     try:
-        filing_10q = c.get_filings(form="10-Q").latest(1)
+        filings_10q = c.get_filings(form="10-Q").latest(1)
     except:
-        filing_10q = None
+        filings_10q = None
     
-    # Combine filings - put 10-Q first so it appears as the most recent
-    all_filings = []
+    # Combine filings using the + operator (Filings objects support this)
     filing_types = {}  # Track which period comes from which filing type
     
-    if filing_10q:
-        all_filings.append(filing_10q)
-    if filing_10k:
-        all_filings.append(filing_10k)
-    
-    if not all_filings:
+    if filings_10q and filings_10k:
+        all_filings = filings_10q + filings_10k
+    elif filings_10q:
+        all_filings = filings_10q
+    elif filings_10k:
+        all_filings = filings_10k
+    else:
         raise ValueError("No filings found")
     
     # Get XBRL data from all filings
@@ -434,17 +435,19 @@ def get_income_dataframe(ticker: str):
         periods_list = [col for col in income_df.columns if col not in ['label', 'concept']]
     
     # Get the period dates from each filing
-    if filing_10q:
+    if filings_10q:
         try:
-            period_10q = filing_10q.period_of_report
+            # Get the first (and only) filing from the Filings object
+            period_10q = filings_10q[0].period_of_report
             print(f"10-Q period: {period_10q}")
             filing_types[str(period_10q)] = "10-Q"
         except Exception as e:
             print(f"Error getting 10-Q period: {e}")
     
-    if filing_10k:
+    if filings_10k:
         try:
-            period_10k = filing_10k.period_of_report
+            # Get the first (and only) filing from the Filings object
+            period_10k = filings_10k[0].period_of_report
             print(f"10-K period: {period_10k}")
             filing_types[str(period_10k)] = "10-K"
         except Exception as e:
@@ -457,11 +460,11 @@ def get_income_dataframe(ticker: str):
     if not filing_types:
         print("WARNING: Using fallback position-based matching")
         for i, period in enumerate(periods_list):
-            if i == 0 and filing_10q:
+            if i == 0 and filings_10q:
                 filing_types[str(period)] = "10-Q"
-            elif i == 1 and filing_10k:
+            elif i == 1 and filings_10k:
                 filing_types[str(period)] = "10-K"
-            elif i == 0 and filing_10k:
+            elif i == 0 and filings_10k:
                 filing_types[str(period)] = "10-K"
     
     return income_df, c.name, periods_list, filing_types
@@ -473,23 +476,23 @@ def get_all_financial_statements(ticker: str):
     
     # Get latest annual (10-K) and quarterly (10-Q) filings
     try:
-        filing_10k = c.get_filings(form="10-K").latest(1)
+        filings_10k = c.get_filings(form="10-K").latest(1)
     except:
-        filing_10k = None
+        filings_10k = None
     
     try:
-        filing_10q = c.get_filings(form="10-Q").latest(1)
+        filings_10q = c.get_filings(form="10-Q").latest(1)
     except:
-        filing_10q = None
+        filings_10q = None
     
-    # Combine filings - put 10-Q first so it appears as the most recent
-    all_filings = []
-    if filing_10q:
-        all_filings.append(filing_10q)
-    if filing_10k:
-        all_filings.append(filing_10k)
-    
-    if not all_filings:
+    # Combine filings using the + operator (Filings objects support this)
+    if filings_10q and filings_10k:
+        all_filings = filings_10q + filings_10k
+    elif filings_10q:
+        all_filings = filings_10q
+    elif filings_10k:
+        all_filings = filings_10k
+    else:
         raise ValueError("No filings found")
     
     # Get XBRL data from all filings
