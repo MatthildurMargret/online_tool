@@ -413,22 +413,25 @@ def get_income_dataframe(ticker: str):
     
     # Map periods to filing types by matching with actual filing dates
     # Ensure periods is always a list - handle both list and special period objects
+    # CRITICAL: Do NOT call list() on periods if it's already a list, as this triggers
+    # internal edgartools methods that may fail with 'list' object has no attribute 'filter'
     try:
-        if isinstance(income_statement.periods, list):
-            periods_list = income_statement.periods
+        periods_obj = income_statement.periods
+        if isinstance(periods_obj, list):
+            # Already a list, use it directly
+            periods_list = periods_obj
+        elif isinstance(periods_obj, str):
+            # Single period as string
+            periods_list = [periods_obj]
         else:
-            # Try to convert to list - this might fail if periods has special methods
-            try:
-                periods_list = list(income_statement.periods)
-            except AttributeError as e:
-                # If conversion fails, try to extract periods manually
-                print(f"Warning: Could not convert periods to list: {e}")
-                print(f"Periods type: {type(income_statement.periods)}")
-                # Try to get periods from dataframe columns instead
-                periods_list = [col for col in income_df.columns if col not in ['label', 'concept']]
-    except (TypeError, AttributeError) as e:
+            # Try to extract from dataframe columns as fallback
+            # This avoids calling list() which may trigger internal edgartools issues
+            periods_list = [col for col in income_df.columns if col not in ['label', 'concept']]
+            print(f"Extracted {len(periods_list)} periods from dataframe columns")
+    except Exception as e:
         print(f"Error accessing periods: {e}")
-        periods_list = [income_statement.periods]
+        # Last resort: extract from dataframe
+        periods_list = [col for col in income_df.columns if col not in ['label', 'concept']]
     
     # Get the period dates from each filing
     if filing_10q:
@@ -505,12 +508,15 @@ def get_all_financial_statements(ticker: str):
         income_statement = xbs.statements.income_statement()
         result["income_statement"] = income_statement.to_dataframe()
         try:
-            if isinstance(income_statement.periods, list):
-                result["periods"] = income_statement.periods
+            periods_obj = income_statement.periods
+            if isinstance(periods_obj, list):
+                result["periods"] = periods_obj
+            elif isinstance(periods_obj, str):
+                result["periods"] = [periods_obj]
             else:
-                result["periods"] = list(income_statement.periods)
+                result["periods"] = [col for col in result["income_statement"].columns if col not in ['label', 'concept']]
         except (TypeError, AttributeError):
-            result["periods"] = [income_statement.periods]
+            result["periods"] = [col for col in result["income_statement"].columns if col not in ['label', 'concept']]
     except:
         pass
     
@@ -520,12 +526,15 @@ def get_all_financial_statements(ticker: str):
         result["balance_sheet"] = balance_sheet.to_dataframe()
         if not result["periods"]:
             try:
-                if isinstance(balance_sheet.periods, list):
-                    result["periods"] = balance_sheet.periods
+                periods_obj = balance_sheet.periods
+                if isinstance(periods_obj, list):
+                    result["periods"] = periods_obj
+                elif isinstance(periods_obj, str):
+                    result["periods"] = [periods_obj]
                 else:
-                    result["periods"] = list(balance_sheet.periods)
+                    result["periods"] = [col for col in result["balance_sheet"].columns if col not in ['label', 'concept']]
             except (TypeError, AttributeError):
-                result["periods"] = [balance_sheet.periods]
+                result["periods"] = [col for col in result["balance_sheet"].columns if col not in ['label', 'concept']]
     except:
         pass
     
@@ -535,12 +544,15 @@ def get_all_financial_statements(ticker: str):
         result["cash_flow"] = cash_flow.to_dataframe()
         if not result["periods"]:
             try:
-                if isinstance(cash_flow.periods, list):
-                    result["periods"] = cash_flow.periods
+                periods_obj = cash_flow.periods
+                if isinstance(periods_obj, list):
+                    result["periods"] = periods_obj
+                elif isinstance(periods_obj, str):
+                    result["periods"] = [periods_obj]
                 else:
-                    result["periods"] = list(cash_flow.periods)
+                    result["periods"] = [col for col in result["cash_flow"].columns if col not in ['label', 'concept']]
             except (TypeError, AttributeError):
-                result["periods"] = [cash_flow.periods]
+                result["periods"] = [col for col in result["cash_flow"].columns if col not in ['label', 'concept']]
     except:
         pass
     
@@ -613,9 +625,14 @@ def get_income(ticker):
         })
     
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"ERROR in get_income for {ticker}:")
+        print(error_details)
         return jsonify({
             "success": False,
-            "error": str(e)
+            "error": str(e),
+            "details": error_details
         }), 500
 
 
@@ -1820,12 +1837,15 @@ def cache_tickers():
                 
                 # Ensure periods is always a list
                 try:
-                    if isinstance(income_statement.periods, list):
-                        periods_list = income_statement.periods
+                    periods_obj = income_statement.periods
+                    if isinstance(periods_obj, list):
+                        periods_list = periods_obj
+                    elif isinstance(periods_obj, str):
+                        periods_list = [periods_obj]
                     else:
-                        periods_list = list(income_statement.periods)
+                        periods_list = [col for col in income_df.columns if col not in ['label', 'concept']]
                 except (TypeError, AttributeError):
-                    periods_list = [income_statement.periods]
+                    periods_list = [col for col in income_df.columns if col not in ['label', 'concept']]
                 
                 # Get the period date
                 filing_types = {}
