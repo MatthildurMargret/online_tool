@@ -412,8 +412,14 @@ def get_income_dataframe(ticker: str):
     income_df = income_statement.to_dataframe()
     
     # Map periods to filing types by matching with actual filing dates
-    # Ensure periods is always a list
-    periods_list = list(income_statement.periods) if hasattr(income_statement.periods, '__iter__') else [income_statement.periods]
+    # Ensure periods is always a list - handle both list and special period objects
+    try:
+        if isinstance(income_statement.periods, list):
+            periods_list = income_statement.periods
+        else:
+            periods_list = list(income_statement.periods)
+    except (TypeError, AttributeError):
+        periods_list = [income_statement.periods]
     
     # Get the period dates from each filing
     if filing_10q:
@@ -489,7 +495,13 @@ def get_all_financial_statements(ticker: str):
     try:
         income_statement = xbs.statements.income_statement()
         result["income_statement"] = income_statement.to_dataframe()
-        result["periods"] = list(income_statement.periods) if hasattr(income_statement.periods, '__iter__') else [income_statement.periods]
+        try:
+            if isinstance(income_statement.periods, list):
+                result["periods"] = income_statement.periods
+            else:
+                result["periods"] = list(income_statement.periods)
+        except (TypeError, AttributeError):
+            result["periods"] = [income_statement.periods]
     except:
         pass
     
@@ -498,7 +510,13 @@ def get_all_financial_statements(ticker: str):
         balance_sheet = xbs.statements.balance_sheet()
         result["balance_sheet"] = balance_sheet.to_dataframe()
         if not result["periods"]:
-            result["periods"] = list(balance_sheet.periods) if hasattr(balance_sheet.periods, '__iter__') else [balance_sheet.periods]
+            try:
+                if isinstance(balance_sheet.periods, list):
+                    result["periods"] = balance_sheet.periods
+                else:
+                    result["periods"] = list(balance_sheet.periods)
+            except (TypeError, AttributeError):
+                result["periods"] = [balance_sheet.periods]
     except:
         pass
     
@@ -507,7 +525,13 @@ def get_all_financial_statements(ticker: str):
         cash_flow = xbs.statements.cash_flow_statement()
         result["cash_flow"] = cash_flow.to_dataframe()
         if not result["periods"]:
-            result["periods"] = list(cash_flow.periods) if hasattr(cash_flow.periods, '__iter__') else [cash_flow.periods]
+            try:
+                if isinstance(cash_flow.periods, list):
+                    result["periods"] = cash_flow.periods
+                else:
+                    result["periods"] = list(cash_flow.periods)
+            except (TypeError, AttributeError):
+                result["periods"] = [cash_flow.periods]
     except:
         pass
     
@@ -1785,7 +1809,14 @@ def cache_tickers():
                 income_statement = xbs.statements.income_statement()
                 income_df = income_statement.to_dataframe()
                 
-                periods_list = list(income_statement.periods)
+                # Ensure periods is always a list
+                try:
+                    if isinstance(income_statement.periods, list):
+                        periods_list = income_statement.periods
+                    else:
+                        periods_list = list(income_statement.periods)
+                except (TypeError, AttributeError):
+                    periods_list = [income_statement.periods]
                 
                 # Get the period date
                 filing_types = {}
