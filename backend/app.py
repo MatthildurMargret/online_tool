@@ -475,7 +475,7 @@ def get_all_financial_statements(ticker: str):
     try:
         income_statement = xbs.statements.income_statement()
         result["income_statement"] = income_statement.to_dataframe()
-        result["periods"] = income_statement.periods
+        result["periods"] = list(income_statement.periods) if hasattr(income_statement.periods, '__iter__') else [income_statement.periods]
     except:
         pass
     
@@ -484,7 +484,7 @@ def get_all_financial_statements(ticker: str):
         balance_sheet = xbs.statements.balance_sheet()
         result["balance_sheet"] = balance_sheet.to_dataframe()
         if not result["periods"]:
-            result["periods"] = balance_sheet.periods
+            result["periods"] = list(balance_sheet.periods) if hasattr(balance_sheet.periods, '__iter__') else [balance_sheet.periods]
     except:
         pass
     
@@ -493,7 +493,7 @@ def get_all_financial_statements(ticker: str):
         cash_flow = xbs.statements.cash_flow_statement()
         result["cash_flow"] = cash_flow.to_dataframe()
         if not result["periods"]:
-            result["periods"] = cash_flow.periods
+            result["periods"] = list(cash_flow.periods) if hasattr(cash_flow.periods, '__iter__') else [cash_flow.periods]
     except:
         pass
     
