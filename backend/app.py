@@ -384,35 +384,26 @@ def get_income_dataframe(ticker: str):
     c = Company(ticker)
     
     # Get latest annual (10-K) and quarterly (10-Q) filings
-    # Get Filings collections, then filter to latest
     filing_types = {}  # Track which period comes from which filing type
     
-    try:
-        filings_10k_all = c.get_filings(form="10-K")
-        if filings_10k_all:
-            filings_10k = filings_10k_all.latest(1)
-        else:
-            filings_10k = None
-    except:
-        filings_10k = None
+    # Fetch filings separately
+    annual_filing = c.get_filings(form="10-K").latest(1)
+    quarterly_filing = c.get_filings(form="10-Q").latest(1)
     
-    try:
-        filings_10q_all = c.get_filings(form="10-Q")
-        if filings_10q_all:
-            filings_10q = filings_10q_all.latest(1)
-        else:
-            filings_10q = None
-    except:
-        filings_10q = None
+    # Build list of filings (quarterly first for most recent data)
+    all_filings = []
+    filings_10q = None
+    filings_10k = None
     
-    # Combine filings - latest() returns a Filings object that we can combine
-    if filings_10q and filings_10k:
-        all_filings = filings_10q + filings_10k
-    elif filings_10q:
-        all_filings = filings_10q
-    elif filings_10k:
-        all_filings = filings_10k
-    else:
+    if quarterly_filing:
+        all_filings.append(quarterly_filing)
+        filings_10q = quarterly_filing
+    
+    if annual_filing:
+        all_filings.append(annual_filing)
+        filings_10k = annual_filing
+    
+    if not all_filings:
         raise ValueError("No filings found")
     
     # Get XBRL data from all filings
@@ -445,8 +436,7 @@ def get_income_dataframe(ticker: str):
     # Get the period dates from each filing
     if filings_10q:
         try:
-            # Get the first (and only) filing from the Filings object
-            period_10q = filings_10q[0].period_of_report
+            period_10q = filings_10q.period_of_report
             print(f"10-Q period: {period_10q}")
             filing_types[str(period_10q)] = "10-Q"
         except Exception as e:
@@ -454,8 +444,7 @@ def get_income_dataframe(ticker: str):
     
     if filings_10k:
         try:
-            # Get the first (and only) filing from the Filings object
-            period_10k = filings_10k[0].period_of_report
+            period_10k = filings_10k.period_of_report
             print(f"10-K period: {period_10k}")
             filing_types[str(period_10k)] = "10-K"
         except Exception as e:
@@ -483,32 +472,19 @@ def get_all_financial_statements(ticker: str):
     c = Company(ticker)
     
     # Get latest annual (10-K) and quarterly (10-Q) filings
-    try:
-        filings_10k_all = c.get_filings(form="10-K")
-        if filings_10k_all:
-            filings_10k = filings_10k_all.latest(1)
-        else:
-            filings_10k = None
-    except:
-        filings_10k = None
+    annual_filing = c.get_filings(form="10-K").latest(1)
+    quarterly_filing = c.get_filings(form="10-Q").latest(1)
     
-    try:
-        filings_10q_all = c.get_filings(form="10-Q")
-        if filings_10q_all:
-            filings_10q = filings_10q_all.latest(1)
-        else:
-            filings_10q = None
-    except:
-        filings_10q = None
+    # Build list of filings (quarterly first for most recent data)
+    all_filings = []
     
-    # Combine filings - latest() returns a Filings object that we can combine
-    if filings_10q and filings_10k:
-        all_filings = filings_10q + filings_10k
-    elif filings_10q:
-        all_filings = filings_10q
-    elif filings_10k:
-        all_filings = filings_10k
-    else:
+    if quarterly_filing:
+        all_filings.append(quarterly_filing)
+    
+    if annual_filing:
+        all_filings.append(annual_filing)
+    
+    if not all_filings:
         raise ValueError("No filings found")
     
     # Get XBRL data from all filings
