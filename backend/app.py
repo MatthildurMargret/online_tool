@@ -417,8 +417,17 @@ def get_income_dataframe(ticker: str):
         if isinstance(income_statement.periods, list):
             periods_list = income_statement.periods
         else:
-            periods_list = list(income_statement.periods)
-    except (TypeError, AttributeError):
+            # Try to convert to list - this might fail if periods has special methods
+            try:
+                periods_list = list(income_statement.periods)
+            except AttributeError as e:
+                # If conversion fails, try to extract periods manually
+                print(f"Warning: Could not convert periods to list: {e}")
+                print(f"Periods type: {type(income_statement.periods)}")
+                # Try to get periods from dataframe columns instead
+                periods_list = [col for col in income_df.columns if col not in ['label', 'concept']]
+    except (TypeError, AttributeError) as e:
+        print(f"Error accessing periods: {e}")
         periods_list = [income_statement.periods]
     
     # Get the period dates from each filing
