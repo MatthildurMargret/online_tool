@@ -1,0 +1,920 @@
+{
+  "industries": {
+    "Communication Services": {
+      "sectors": {
+        "Diversified Telecommunication Services": {
+          "industry_groups": {
+            "Alternative Carriers": [],
+            "Integrated Telecommunication Services": [
+              "T",
+              "VZ"
+            ],
+            "Wireless Telecommunication Services": [
+              "TMUS"
+            ]
+          }
+        },
+        "Media & Entertainment": {
+          "industry_groups": {
+            "Advertising": [
+              "IPG",
+              "OMC",
+              "TTD"
+            ],
+            "Broadcasting": [
+              "FOXA",
+              "FOX",
+              "NWSA",
+              "NWS",
+              "WBD"
+            ],
+            "Cable & Satellite": [
+              "CHTR",
+              "CMCSA"
+            ],
+            "Movies & Entertainment": [
+              "EA",
+              "LYV",
+              "NFLX",
+              "PSKY",
+              "TTWO",
+              "TKO",
+              "DIS"
+            ],
+            "Interactive Media & Services": [
+              "GOOGL",
+              "GOOG",
+              "MTCH",
+              "META"
+            ]
+          }
+        }
+      }
+    },
+    "Consumer Discretionary": {
+      "sectors": {
+        "Automobiles & Components": {
+          "industry_groups": {
+            "Automotive Parts & Equipment": [
+              "APTV"
+            ],
+            "Tires & Rubber": [],
+            "Automobile Manufacturers": [
+              "F",
+              "GM",
+              "TSLA"
+            ],
+            "Motorcycle Manufacturers": []
+          }
+        },
+        "Consumer Durables & Apparel": {
+          "industry_groups": {
+            "Household Appliances": [],
+            "Housewares & Specialties": [
+              "GRMN"
+            ],
+            "Leisure Products": [
+              "HAS"
+            ],
+            "Textiles, Apparel & Luxury Goods": [
+              "DECK",
+              "LULU",
+              "NKE",
+              "RL",
+              "TPR"
+            ]
+          }
+        },
+        "Consumer Services": {
+          "industry_groups": {
+            "Hotels, Resorts & Cruise Lines": [
+              "ABNB",
+              "BKNG",
+              "CCL",
+              "EXPE",
+              "HLT",
+              "MAR",
+              "NCLH",
+              "RCL"
+            ],
+            "Restaurants": [
+              "CMG",
+              "DRI",
+              "DPZ",
+              "MCD",
+              "SBUX",
+              "YUM"
+            ],
+            "Leisure Facilities": [
+              "DASH",
+              "DHI",
+              "LVS",
+              "LEN",
+              "MGM",
+              "NVR",
+              "PHM",
+              "WYNN"
+            ],
+            "Education Services": []
+          }
+        },
+        "Retailing": {
+          "industry_groups": {
+            "Distributors": [
+              "GPC",
+              "LKQ",
+              "POOL"
+            ],
+            "Broadline Retail": [
+              "AMZN",
+              "EBAY"
+            ],
+            "Apparel Retail": [
+              "ROST",
+              "TJX"
+            ],
+            "Computer & Electronics Retail": [
+              "BBY"
+            ],
+            "Home Improvement Retail": [
+              "HD",
+              "LOW"
+            ],
+            "Other Specialty Retail": [
+              "TSCO",
+              "ULTA"
+            ],
+            "Automotive Retail": [
+              "AZO",
+              "KMX",
+              "ORLY"
+            ],
+            "Homefurnishing Retail": [
+              "MHK",
+              "WSM"
+            ]
+          }
+        }
+      }
+    },
+    "Consumer Staples": {
+      "sectors": {
+        "Food & Staples Retailing": {
+          "industry_groups": {
+            "Drug Retail": [],
+            "Food Distributors": [
+              "SYY"
+            ],
+            "Food Retail": [
+              "KR"
+            ],
+            "Consumer Staples Merchandise Retail": [
+              "COST",
+              "DG",
+              "DLTR",
+              "TGT",
+              "WMT"
+            ]
+          }
+        },
+        "Food, Beverage & Tobacco": {
+          "industry_groups": {
+            "Agricultural Products": [
+              "ADM",
+              "BG"
+            ],
+            "Brewers": [
+              "TAP"
+            ],
+            "Distillers & Vintners": [
+              "BF.B",
+              "STZ"
+            ],
+            "Food Products": [
+              "CPB",
+              "CAG",
+              "GIS",
+              "HSY",
+              "HRL",
+              "K",
+              "KHC",
+              "LW",
+              "MKC",
+              "MDLZ",
+              "SJM",
+              "TSN"
+            ],
+            "Soft Drinks": [
+              "KO",
+              "KDP",
+              "MNST",
+              "PEP"
+            ],
+            "Tobacco": [
+              "MO",
+              "PM"
+            ]
+          }
+        },
+        "Household & Personal Products": {
+          "industry_groups": {
+            "Household Products": [
+              "CHD",
+              "CLX",
+              "CL",
+              "KMB"
+            ],
+            "Personal Care Products": [
+              "EL",
+              "KVUE",
+              "PG"
+            ]
+          }
+        }
+      }
+    },
+    "Energy": {
+      "sectors": {
+        "Energy Equipment & Services": {
+          "industry_groups": {
+            "Oil & Gas Drilling": [],
+            "Oil & Gas Equipment & Services": [
+              "BKR",
+              "HAL",
+              "SLB"
+            ]
+          }
+        },
+        "Oil, Gas & Consumable Fuels": {
+          "industry_groups": {
+            "Integrated Oil & Gas": [
+              "CVX",
+              "XOM"
+            ],
+            "Oil & Gas Exploration & Production": [
+              "APA",
+              "COP",
+              "CTRA",
+              "DVN",
+              "FANG",
+              "EOG",
+              "EQT",
+              "EXE",
+              "OXY",
+              "TPL"
+            ],
+            "Oil & Gas Refining & Marketing": [
+              "MPC",
+              "PSX",
+              "VLO"
+            ],
+            "Oil & Gas Storage & Transportation": [
+              "KMI",
+              "OKE",
+              "TRGP",
+              "WMB"
+            ],
+            "Coal & Consumable Fuels": []
+          }
+        }
+      }
+    },
+    "Financials": {
+      "sectors": {
+        "Banks": {
+          "industry_groups": {
+            "Diversified Banks": [
+              "BAC",
+              "C",
+              "JPM",
+              "PNC",
+              "TFC",
+              "USB",
+              "WFC"
+            ],
+            "Regional Banks": [
+              "CFG",
+              "FITB",
+              "HBAN",
+              "KEY",
+              "MTB",
+              "RF"
+            ]
+          }
+        },
+        "Diversified Financials": {
+          "industry_groups": {
+            "Diversified Financial Services": [],
+            "Multi-Sector Holdings": [
+              "BRK.B"
+            ],
+            "Specialized Finance": [
+              "XYZ",
+              "CBOE",
+              "CME",
+              "COIN",
+              "CPAY",
+              "FDS",
+              "FIS",
+              "FI",
+              "GPN",
+              "ICE",
+              "JKHY",
+              "MA",
+              "MCO",
+              "MSCI",
+              "NDAQ",
+              "PYPL",
+              "SPGI",
+              "V"
+            ],
+            "Consumer Finance": [
+              "AXP",
+              "COF",
+              "SYF"
+            ],
+            "Asset Management & Custody Banks": [
+              "AMP",
+              "APO",
+              "BLK",
+              "BX",
+              "BK",
+              "BEN",
+              "IVZ",
+              "KKR",
+              "NTRS",
+              "STT",
+              "TROW"
+            ],
+            "Investment Banking & Brokerage": [
+              "SCHW",
+              "GS",
+              "IBKR",
+              "MS",
+              "RJF",
+              "HOOD"
+            ]
+          }
+        },
+        "Insurance": {
+          "industry_groups": {
+            "Insurance Brokers": [
+              "AON",
+              "AJG",
+              "BRO",
+              "ERIE",
+              "MMC",
+              "WTW"
+            ],
+            "Life & Health Insurance": [
+              "AFL",
+              "GL",
+              "MET",
+              "PFG",
+              "PRU"
+            ],
+            "Property & Casualty Insurance": [
+              "ALL",
+              "AIG",
+              "ACGL",
+              "AIZ",
+              "CB",
+              "CINF",
+              "HIG",
+              "L",
+              "PGR",
+              "TRV",
+              "WRB"
+            ],
+            "Reinsurance": [
+              "EG"
+            ]
+          }
+        }
+      }
+    },
+    "Health Care": {
+      "sectors": {
+        "Health Care Equipment & Services": {
+          "industry_groups": {
+            "Health Care Equipment": [
+              "ABT",
+              "BAX",
+              "BDX",
+              "BSX",
+              "DXCM",
+              "EW",
+              "GEHC",
+              "HOLX",
+              "IDXX",
+              "PODD",
+              "ISRG",
+              "MDT",
+              "RMD",
+              "RVTY",
+              "STE",
+              "SYK",
+              "ZBH"
+            ],
+            "Health Care Supplies": [
+              "ALGN",
+              "COO",
+              "WST"
+            ],
+            "Health Care Distributors": [
+              "CAH",
+              "COR",
+              "HSIC",
+              "MCK"
+            ],
+            "Health Care Services": [
+              "CI",
+              "CVS",
+              "DVA",
+              "LH",
+              "DGX"
+            ],
+            "Health Care Facilities": [
+              "HCA",
+              "UHS"
+            ],
+            "Managed Health Care": [
+              "CNC",
+              "ELV",
+              "HUM",
+              "MOH",
+              "UNH"
+            ],
+            "Health Care Technology": [
+              "SOLV"
+            ]
+          }
+        },
+        "Pharmaceuticals, Biotechnology & Life Sciences": {
+          "industry_groups": {
+            "Biotechnology": [
+              "ABBV",
+              "AMGN",
+              "BIIB",
+              "GILD",
+              "INCY",
+              "MRNA",
+              "REGN",
+              "VRTX"
+            ],
+            "Pharmaceuticals": [
+              "BMY",
+              "JNJ",
+              "LLY",
+              "MRK",
+              "PFE",
+              "VTRS",
+              "ZTS"
+            ],
+            "Life Sciences Tools & Services": [
+              "A",
+              "TECH",
+              "CRL",
+              "DHR",
+              "IQV",
+              "MTD",
+              "TMO",
+              "WAT"
+            ]
+          }
+        }
+      }
+    },
+    "Industrials": {
+      "sectors": {
+        "Capital Goods": {
+          "industry_groups": {
+            "Aerospace & Defense": [
+              "AXON",
+              "BA",
+              "GE",
+              "GD",
+              "HWM",
+              "HII",
+              "LHX",
+              "LMT",
+              "NOC",
+              "RTX",
+              "TXT",
+              "TDG"
+            ],
+            "Building Products": [
+              "AOS",
+              "ALLE",
+              "BLDR",
+              "CARR",
+              "JCI",
+              "LII",
+              "MAS",
+              "TT"
+            ],
+            "Construction & Engineering": [
+              "EME",
+              "J",
+              "PWR"
+            ],
+            "Electrical Equipment": [
+              "AME",
+              "ETN",
+              "EMR",
+              "GEV",
+              "GNRC",
+              "ROK"
+            ],
+            "Industrial Conglomerates": [
+              "MMM",
+              "HON"
+            ],
+            "Machinery": [
+              "CAT",
+              "CMI",
+              "DE",
+              "DOV",
+              "FTV",
+              "HUBB",
+              "IEX",
+              "ITW",
+              "IR",
+              "NDSN",
+              "OTIS",
+              "PCAR",
+              "PH",
+              "PNR",
+              "SNA",
+              "SWK",
+              "GWW",
+              "WAB",
+              "XYL"
+            ],
+            "Trading Companies & Distributors": [
+              "FAST",
+              "URI"
+            ]
+          }
+        },
+        "Commercial & Professional Services": {
+          "industry_groups": {
+            "Commercial Printing": [],
+            "Professional Services": [
+              "ADP",
+              "CTAS",
+              "CPRT",
+              "DAY",
+              "EFX",
+              "LDOS",
+              "PAYX",
+              "PAYC",
+              "VRSK"
+            ],
+            "Environmental & Facilities Services": [
+              "RSG",
+              "ROL",
+              "VLTO",
+              "WM"
+            ],
+            "Office Services & Supplies": []
+          }
+        },
+        "Transportation": {
+          "industry_groups": {
+            "Air Freight & Logistics": [
+              "CHRW",
+              "EXPD",
+              "FDX",
+              "UPS"
+            ],
+            "Airlines": [
+              "DAL",
+              "LUV",
+              "UAL"
+            ],
+            "Marine": [],
+            "Road & Rail": [
+              "CSX",
+              "JBHT",
+              "NSC",
+              "ODFL",
+              "UBER",
+              "UNP"
+            ],
+            "Transportation Infrastructure": []
+          }
+        }
+      }
+    },
+    "Information Technology": {
+      "sectors": {
+        "Software & Services": {
+          "industry_groups": {
+            "IT Consulting & Other Services": [
+              "ACN",
+              "CTSH",
+              "EPAM",
+              "IT",
+              "IBM"
+            ],
+            "Internet Services & Infrastructure": [
+              "AKAM",
+              "GDDY",
+              "VRSN"
+            ],
+            "Data Processing & Outsourced Services": [
+              "BR"
+            ],
+            "Application Software": [
+              "ADBE",
+              "APP",
+              "ADSK",
+              "CDNS",
+              "DDOG",
+              "FICO",
+              "INTU",
+              "ORCL",
+              "PLTR",
+              "PTC",
+              "CRM",
+              "SNPS",
+              "TYL",
+              "WDAY"
+            ],
+            "Systems Software": [
+              "CRWD",
+              "FTNT",
+              "GEN",
+              "MSFT",
+              "PANW",
+              "NOW"
+            ],
+            "Home Entertainment Software": []
+          }
+        },
+        "Technology Hardware & Equipment": {
+          "industry_groups": {
+            "Communications Equipment": [
+              "ANET",
+              "CSCO",
+              "FFIV",
+              "MSI"
+            ],
+            "Technology Hardware, Storage & Peripherals": [
+              "AAPL",
+              "DELL",
+              "HPE",
+              "HPQ",
+              "NTAP",
+              "STX",
+              "SMCI",
+              "WDC"
+            ],
+            "Electronic Equipment & Instruments": [
+              "KEYS",
+              "ROP",
+              "TDY",
+              "TRMB",
+              "ZBRA"
+            ],
+            "Electronic Components": [
+              "APH",
+              "GLW"
+            ],
+            "Electronic Manufacturing Services": [
+              "JBL",
+              "TEL"
+            ],
+            "Technology Distributors": [
+              "CDW"
+            ]
+          }
+        },
+        "Semiconductors & Semiconductor Equipment": {
+          "industry_groups": {
+            "Semiconductor Equipment": [
+              "AMAT",
+              "KLAC",
+              "LRCX",
+              "TER"
+            ],
+            "Semiconductors": [
+              "AMD",
+              "ADI",
+              "AVGO",
+              "FSLR",
+              "INTC",
+              "MCHP",
+              "MU",
+              "MPWR",
+              "NVDA",
+              "NXPI",
+              "ON",
+              "QCOM",
+              "SWKS",
+              "TXN"
+            ]
+          }
+        }
+      }
+    },
+    "Materials": {
+      "sectors": {
+        "Chemicals": {
+          "industry_groups": {
+            "Commodity Chemicals": [
+              "DOW"
+            ],
+            "Diversified Chemicals": [],
+            "Fertilizers & Agricultural Chemicals": [
+              "CF",
+              "CTVA",
+              "MOS"
+            ],
+            "Industrial Gases": [
+              "APD",
+              "LIN"
+            ],
+            "Specialty Chemicals": [
+              "ALB",
+              "DD",
+              "EMN",
+              "ECL",
+              "IFF",
+              "LYB",
+              "PPG",
+              "SHW"
+            ]
+          }
+        },
+        "Construction Materials": {
+          "industry_groups": {
+            "Construction Materials": [
+              "MLM",
+              "VMC"
+            ]
+          }
+        },
+        "Containers & Packaging": {
+          "industry_groups": {
+            "Metal & Glass Containers": [
+              "BALL"
+            ],
+            "Paper Packaging": [
+              "AMCR",
+              "AVY",
+              "IP",
+              "PKG",
+              "SW"
+            ]
+          }
+        },
+        "Metals & Mining": {
+          "industry_groups": {
+            "Aluminum": [],
+            "Diversified Metals & Mining": [],
+            "Copper": [
+              "FCX"
+            ],
+            "Gold": [
+              "NEM"
+            ],
+            "Precious Metals & Minerals": [],
+            "Silver": [],
+            "Steel": [
+              "NUE",
+              "STLD"
+            ]
+          }
+        },
+        "Paper & Forest Products": {
+          "industry_groups": {
+            "Forest Products": [],
+            "Paper Products": []
+          }
+        }
+      }
+    },
+    "Real Estate": {
+      "sectors": {
+        "Real Estate Management & Development": {
+          "industry_groups": {
+            "Diversified Real Estate Activities": [],
+            "Real Estate Operating Companies": [],
+            "Real Estate Development": [],
+            "Real Estate Services": [
+              "CBRE",
+              "CSGP"
+            ]
+          }
+        },
+        "Equity Real Estate Investment Trusts (REITs)": {
+          "industry_groups": {
+            "Equity Real Estate Investment Trusts (REITs)": [
+              "ARE",
+              "AMT",
+              "AVB",
+              "BXP",
+              "CPT",
+              "CCI",
+              "DLR",
+              "EQIX",
+              "EQR",
+              "ESS",
+              "EXR",
+              "FRT",
+              "DOC",
+              "HST",
+              "INVH",
+              "IRM",
+              "KIM",
+              "MAA",
+              "PLD",
+              "PSA",
+              "O",
+              "REG",
+              "SBAC",
+              "SPG",
+              "UDR",
+              "VTR",
+              "VICI",
+              "WELL",
+              "WY"
+            ]
+          }
+        },
+        "Mortgage Real Estate Investment Trusts (REITs)": {
+          "industry_groups": {
+            "Mortgage Real Estate Investment Trusts (REITs)": []
+          }
+        }
+      }
+    },
+    "Utilities": {
+      "sectors": {
+        "Electric Utilities": {
+          "industry_groups": {
+            "Electric Utilities": [
+              "LNT",
+              "AEP",
+              "CEG",
+              "DUK",
+              "EIX",
+              "ETR",
+              "EVRG",
+              "ES",
+              "EXC",
+              "FE",
+              "PPL",
+              "PEG",
+              "SO",
+              "VST",
+              "WEC"
+            ]
+          }
+        },
+        "Gas Utilities": {
+          "industry_groups": {
+            "Gas Utilities": [
+              "ATO"
+            ]
+          }
+        },
+        "Multi-Utilities": {
+          "industry_groups": {
+            "Multi-Utilities": [
+              "AEE",
+              "CNP",
+              "CMS",
+              "ED",
+              "D",
+              "DTE",
+              "NEE",
+              "NI",
+              "PCG",
+              "PNW",
+              "SRE",
+              "XEL"
+            ]
+          }
+        },
+        "Water Utilities": {
+          "industry_groups": {
+            "Water Utilities": [
+              "AWK"
+            ]
+          }
+        },
+        "Independent Power Producers & Energy Traders": {
+          "industry_groups": {
+            "Independent Power and Renewable Electricity Producers": [
+              "AES",
+              "NRG"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
