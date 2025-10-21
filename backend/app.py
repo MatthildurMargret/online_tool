@@ -384,20 +384,28 @@ def get_income_dataframe(ticker: str):
     c = Company(ticker)
     
     # Get latest annual (10-K) and quarterly (10-Q) filings
-    # Note: We get Filings objects (not individual Filing), then combine them
+    # Get Filings collections, then filter to latest
+    filing_types = {}  # Track which period comes from which filing type
+    
     try:
-        filings_10k = c.get_filings(form="10-K").latest(1)
+        filings_10k_all = c.get_filings(form="10-K")
+        if filings_10k_all:
+            filings_10k = filings_10k_all.latest(1)
+        else:
+            filings_10k = None
     except:
         filings_10k = None
     
     try:
-        filings_10q = c.get_filings(form="10-Q").latest(1)
+        filings_10q_all = c.get_filings(form="10-Q")
+        if filings_10q_all:
+            filings_10q = filings_10q_all.latest(1)
+        else:
+            filings_10q = None
     except:
         filings_10q = None
     
-    # Combine filings using the + operator (Filings objects support this)
-    filing_types = {}  # Track which period comes from which filing type
-    
+    # Combine filings - latest() returns a Filings object that we can combine
     if filings_10q and filings_10k:
         all_filings = filings_10q + filings_10k
     elif filings_10q:
@@ -476,16 +484,24 @@ def get_all_financial_statements(ticker: str):
     
     # Get latest annual (10-K) and quarterly (10-Q) filings
     try:
-        filings_10k = c.get_filings(form="10-K").latest(1)
+        filings_10k_all = c.get_filings(form="10-K")
+        if filings_10k_all:
+            filings_10k = filings_10k_all.latest(1)
+        else:
+            filings_10k = None
     except:
         filings_10k = None
     
     try:
-        filings_10q = c.get_filings(form="10-Q").latest(1)
+        filings_10q_all = c.get_filings(form="10-Q")
+        if filings_10q_all:
+            filings_10q = filings_10q_all.latest(1)
+        else:
+            filings_10q = None
     except:
         filings_10q = None
     
-    # Combine filings using the + operator (Filings objects support this)
+    # Combine filings - latest() returns a Filings object that we can combine
     if filings_10q and filings_10k:
         all_filings = filings_10q + filings_10k
     elif filings_10q:
