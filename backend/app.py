@@ -917,23 +917,32 @@ def get_stock_price(ticker):
 
 @app.route("/api/financial-data/<ticker>", methods=["GET"])
 def get_financial_data(ticker):
-    """API endpoint to get additional financial data for ratio calculations"""
+    """API endpoint to get additional financial data for ratio calculations - pulls from Supabase"""
     try:
         ticker_upper = ticker.upper()
         
-        # Check cache first
-        cache_key = ticker_upper + "_financial_data"
-        cached = get_cached_data(cache_key)
-        if cached:
-            cached = _clean_json_numbers(cached)
-            return jsonify({
-                "success": True,
-                "data": cached,
-                "cached": True
-            })
+        # Get from Supabase database
+        fin = get_company_financials(ticker_upper)
         
-        # Fetch all financial statements
-        statements = get_all_financial_statements(ticker_upper)
+        if not fin or not fin.get('raw_data'):
+            return jsonify({
+                "success": False,
+                "error": f"No data found for {ticker_upper}"
+            }), 404
+        
+        # Parse the stored data
+        raw_payload = fin['raw_data']
+        if isinstance(raw_payload, str):
+            raw_payload = json.loads(raw_payload)
+        
+        # Extract what we need from the stored data
+        statements = {
+            "company_name": fin.get('company_name', ticker_upper),
+            "periods": raw_payload.get('income_statement', {}).get('periods', []),
+            "balance_sheet": None,  # Not needed for current calculations
+            "cash_flow": None,  # Not needed for current calculations
+            "metrics": raw_payload.get('metrics', {})
+        }
         
         if not statements["periods"]:
             return jsonify({
@@ -944,145 +953,20 @@ def get_financial_data(ticker):
         # Sort periods by date (most recent first)
         sorted_periods = sorted(statements["periods"], key=lambda x: x, reverse=True)
         
-        # Extract key metrics from balance sheet and cash flow
+        # Return the metrics directly from database
         result_data = {
             "ticker": ticker_upper,
             "company_name": statements["company_name"],
             "periods": sorted_periods,
-            "metrics": {}
+            "metrics": statements["metrics"]
         }
         
-        # Extract balance sheet metrics
-        if statements["balance_sheet"] is not None:
-            bs_df = statements["balance_sheet"]
-
-            # Normalize accessors
-            def first_row_by_concepts(df, concept_substrings):
-                for _, r in df.iterrows():
-                    c = str(r.get('concept', ''))
-                    if any(sub in c for sub in concept_substrings):
-                        return r
-                return None
-
-            # Stockholders' equity: handle common variants
-            equity_candidates = [
-                'us-gaap_StockholdersEquity',
-                'us-gaap_StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
-                'StockholdersEquity',
-                'PartnersCapital',
-                'us-gaap_LiabilitiesAndStockholdersEquity'  # Sometimes only total is available
-            ]
-            equity_item = first_row_by_concepts(bs_df, equity_candidates)
-            
-            # If we got total liabilities + equity, try to subtract liabilities
-            if equity_item is not None and 'LiabilitiesAndStockholdersEquity' in str(equity_item.get('concept', '')):
-                # Try to find total liabilities to subtract
-                liabilities_candidates = ['us-gaap_Liabilities', 'Liabilities']
-                liabilities_item = first_row_by_concepts(bs_df, liabilities_candidates)
-                if liabilities_item is not None:
-                    # Create a new row with equity = total - liabilities
-                    equity_item = equity_item.copy()
-                    for period in sorted_periods:
-                        if period in equity_item and period in liabilities_item:
-                            total = _safe_number(equity_item[period])
-                            liab = _safe_number(liabilities_item[period])
-                            if total is not None and liab is not None:
-                                equity_item[period] = total - liab
-                else:
-                    # Can't calculate equity, set to None
-                    equity_item = None
-            
-            # Debug: If equity not found, log available concepts
-            if equity_item is None:
-                print(f"[DEBUG] Equity not found. Available balance sheet concepts:")
-                for _, r in bs_df.head(20).iterrows():
-                    concept = r.get('concept', '')
-                    label = r.get('label', '')
-                    if 'equity' in label.lower() or 'capital' in label.lower():
-                        print(f"  - {concept}: {label}")
-
-            # Debt: combine current + noncurrent variants if present
-            debt_current_candidates = [
-                'us-gaap_DebtCurrent',
-                'us-gaap_ShortTermBorrowings',
-                'us-gaap_NotesPayableShortTerm',
-                'us-gaap_CommercialPaper',
-                'DebtCurrent'
-            ]
-            debt_noncurrent_candidates = [
-                'us-gaap_LongTermDebtNoncurrent',
-                'us-gaap_LongTermDebtAndCapitalLeaseObligations',
-                'us-gaap_LongTermDebt',
-                'us-gaap_LongTermDebtAndCapitalLeaseObligationsNoncurrent',
-                'LongTermDebt'
-            ]
-            debt_current = first_row_by_concepts(bs_df, debt_current_candidates)
-            debt_noncurrent = first_row_by_concepts(bs_df, debt_noncurrent_candidates)
-            
-            # Debug: If debt not found, log available concepts
-            if debt_current is None and debt_noncurrent is None:
-                print(f"[DEBUG] Debt not found. Available balance sheet concepts:")
-                for _, r in bs_df.head(30).iterrows():
-                    concept = r.get('concept', '')
-                    label = r.get('label', '')
-                    if 'debt' in label.lower() or 'borrowing' in label.lower() or 'note' in label.lower():
-                        print(f"  - {concept}: {label}")
-
-            if equity_item is not None:
-                result_data["metrics"]["equity"] = {}
-                for period in sorted_periods:
-                    if period in equity_item:
-                        result_data["metrics"]["equity"][period] = _safe_number(equity_item[period])
-
-            # Build total debt per period
-            if debt_current is not None or debt_noncurrent is not None:
-                result_data["metrics"]["debt"] = {}
-                for period in sorted_periods:
-                    total = 0.0
-                    has_val = False
-                    if debt_current is not None and period in debt_current:
-                        v = _safe_number(debt_current[period])
-                        if v is not None:
-                            total += v
-                            has_val = True
-                    if debt_noncurrent is not None and period in debt_noncurrent:
-                        v = _safe_number(debt_noncurrent[period])
-                        if v is not None:
-                            total += v
-                            has_val = True
-                    result_data["metrics"]["debt"][period] = total if has_val else None
-        
-        # Extract cash flow metrics
-        if statements["cash_flow"] is not None:
-            cf_df = statements["cash_flow"]
-
-            # Operating cash flow common variants
-            ocf_candidates = [
-                'us-gaap_NetCashProvidedByUsedInOperatingActivities',
-                'us-gaap_NetCashProvidedByUsedInOperatingActivitiesContinuingOperations',
-                'OperatingActivities'
-            ]
-            ocf_item = None
-            for _, row in cf_df.iterrows():
-                concept = str(row.get('concept', ''))
-                if any(sub in concept for sub in ocf_candidates):
-                    ocf_item = row
-                    break
-
-            if ocf_item is not None:
-                result_data["metrics"]["operating_cash_flow"] = {}
-                for period in sorted_periods:
-                    if period in ocf_item:
-                        result_data["metrics"]["operating_cash_flow"][period] = _safe_number(ocf_item[period])
-        
-        # Cache the result
         result_data = _clean_json_numbers(result_data)
-        cache_data(cache_key, result_data)
         
         return jsonify({
             "success": True,
             "data": result_data,
-            "cached": False
+            "from_database": True
         })
     
     except Exception as e:
@@ -1096,65 +980,11 @@ def get_financial_data(ticker):
 def get_recent_filings(ticker):
     """API endpoint to get recent filings (10-K and 10-Q)"""
     try:
-        ticker_upper = ticker.upper()
-        
-        # Check cache first
-        cached = get_cached_data(ticker_upper + "_filings")
-        if cached:
-            return jsonify({
-                "success": True,
-                "data": cached,
-                "cached": True
-            })
-        
-        # Fetch from Edgar
-        c = Company(ticker_upper)
-        
-        # Get latest 5 filings of each type
-        filings_10k = c.get_filings(form="10-K").latest(3)
-        filings_10q = c.get_filings(form="10-Q").latest(3)
-        
-        result_data = {
-            "ticker": ticker_upper,
-            "company_name": c.name,
-            "filings": []
-        }
-        
-        # Process 10-K filings
-        if filings_10k:
-            for filing in filings_10k:
-                result_data["filings"].append({
-                    "form": "10-K",
-                    "filing_date": filing.filing_date.isoformat() if hasattr(filing.filing_date, 'isoformat') else str(filing.filing_date),
-                    "period": filing.period_of_report.isoformat() if hasattr(filing.period_of_report, 'isoformat') else str(filing.period_of_report),
-                    "accession_number": filing.accession_number
-                })
-        
-        # Process 10-Q filings
-        if filings_10q:
-            for filing in filings_10q:
-                result_data["filings"].append({
-                    "form": "10-Q",
-                    "filing_date": filing.filing_date.isoformat() if hasattr(filing.filing_date, 'isoformat') else str(filing.filing_date),
-                    "period": filing.period_of_report.isoformat() if hasattr(filing.period_of_report, 'isoformat') else str(filing.period_of_report),
-                    "accession_number": filing.accession_number
-                })
-        
-        # Sort by filing date (most recent first)
-        result_data["filings"].sort(key=lambda x: x["filing_date"], reverse=True)
-        
-        # Keep only the 5 most recent
-        result_data["filings"] = result_data["filings"][:5]
-        
-        # Cache the result
-        cache_data(ticker_upper + "_filings", result_data)
-        
+        # This endpoint is deprecated - return empty for now
         return jsonify({
-            "success": True,
-            "data": result_data,
-            "cached": False
-        })
-    
+            "success": False,
+            "error": "This endpoint is deprecated"
+        }), 404
     except Exception as e:
         return jsonify({
             "success": False,
