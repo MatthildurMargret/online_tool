@@ -709,7 +709,7 @@ def fetch_and_compute_live_data(ticker: str):
             # Sum last 4 quarters
             revenue_values = []
             for period in quarterly_periods[:4]:
-                rev, _ = _select_best_revenue(income_items, [period], prefer_period=period)
+                rev, _, _ = _select_best_revenue(income_items, [period], prefer_period=period)
                 if rev:
                     revenue_values.append(rev)
             if len(revenue_values) == 4:
@@ -792,6 +792,15 @@ def fetch_and_compute_live_data(ticker: str):
         if net_income:
             metrics['net_income'] = net_income
         
+        # Shares outstanding (per period)
+        shares_metric = extract_metric(income_items, [
+            'us-gaap_WeightedAverageNumberOfSharesOutstandingBasic',
+            'us-gaap_WeightedAverageNumberOfDilutedSharesOutstanding',
+            'us-gaap_CommonStockSharesOutstanding'
+        ], sorted_periods)
+        if shares_metric:
+            metrics['shares'] = shares_metric
+        
         # Build response structure
         result = {
             'income_statement': {
@@ -815,6 +824,9 @@ def fetch_and_compute_live_data(ticker: str):
         }
         
         print(f"[LIVE FETCH] Successfully fetched data for {ticker}")
+        print(f"[LIVE FETCH] Revenue: ${revenue:,.0f}" if revenue else "[LIVE FETCH] Revenue: None")
+        print(f"[LIVE FETCH] Shares: {shares:,.0f}" if shares else "[LIVE FETCH] Shares: None")
+        print(f"[LIVE FETCH] Metrics extracted: {list(metrics.keys())}")
         return result
         
     except Exception as e:
@@ -1217,7 +1229,7 @@ def get_stock_price(ticker):
 
 @app.route("/api/financial-data/<ticker>", methods=["GET"])
 def get_financial_data(ticker):
-    """API endpoint to get additional financial data for ratio calculations - pulls from Supabase"""
+    """API endpoint to get additional financial data for ratio calculations - pulls from Supabase or fetches live"""
     try:
         ticker_upper = ticker.upper()
         
@@ -1225,10 +1237,32 @@ def get_financial_data(ticker):
         fin = get_company_financials(ticker_upper)
         
         if not fin or not fin.get('raw_data'):
+            # Try live fetch
+            print(f"[ON-THE-FLY] Fetching financial data for {ticker_upper} from Edgar...")
+            live_data = fetch_and_compute_live_data(ticker_upper)
+            
+            if not live_data:
+                return jsonify({
+                    "success": False,
+                    "error": f"No data found for {ticker_upper}"
+                }), 404
+            
+            # Return live data in expected format
+            result_data = {
+                "ticker": ticker_upper,
+                "company_name": live_data.get('income_statement', {}).get('company_name', ticker_upper),
+                "periods": live_data.get('income_statement', {}).get('periods', []),
+                "metrics": live_data.get('metrics', {})
+            }
+            
+            result_data = _clean_json_numbers(result_data)
+            
             return jsonify({
-                "success": False,
-                "error": f"No data found for {ticker_upper}"
-            }), 404
+                "success": True,
+                "data": result_data,
+                "from_database": False,
+                "live_fetch": True
+            })
         
         # Parse the stored data
         raw_payload = fin['raw_data']
