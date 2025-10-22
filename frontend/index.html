@@ -1831,10 +1831,11 @@
                     const shares = sharesItem?.values?.[latestPeriod];
                     
                     // Get metrics from stored data (including EPS)
-                    const equity = pickValue(metrics.equity);
-                    const netIncome = pickValue(metrics.net_income);
+                    const equity = pickValue(metrics.equity); // Balance sheet item - use latest period
+                    const netIncomeSinglePeriod = pickValue(metrics.net_income); // For reference only
                     const epsBasicMap = metrics.eps_basic || {};
                     const epsDilutedMap = metrics.eps_diluted || {};
+                    const netIncomeMap = metrics.net_income || {};
                     
                     // Calculate TTM metrics for ratios
                     const meta = Array.isArray(currentFinancialData.period_metadata) ? currentFinancialData.period_metadata : [];
@@ -1937,10 +1938,40 @@
                         }
                     }
                     
+                    // Calculate TTM Net Income (for ROE calculation)
+                    let netIncomeTTM = null;
+                    const netIncomePeriodsAvailable = Object.keys(netIncomeMap).sort().reverse();
+                    
+                    // Try to sum last 4 quarters of net income
+                    if (netIncomePeriodsAvailable.length >= 4) {
+                        const last4 = netIncomePeriodsAvailable.slice(0, 4);
+                        const vals = last4.map(p => netIncomeMap[p]).filter(v => Number.isFinite(v));
+                        if (vals.length === 4) {
+                            netIncomeTTM = vals.reduce((a,b)=>a+b,0);
+                            console.log('Calculated TTM Net Income from 4 quarters:', { periods: last4, values: vals, netIncomeTTM });
+                        }
+                    }
+                    
+                    // Fallback: use most recent annual net income
+                    if (!Number.isFinite(netIncomeTTM) && annualPeriods.length > 0 && netIncomeMap[annualPeriods[0]]) {
+                        netIncomeTTM = netIncomeMap[annualPeriods[0]];
+                    }
+                    
+                    // Fallback: annualize single quarter
+                    if (!Number.isFinite(netIncomeTTM) && netIncomePeriodsAvailable.length > 0) {
+                        const vq = netIncomeMap[netIncomePeriodsAvailable[0]];
+                        if (Number.isFinite(vq)) netIncomeTTM = vq * 4;
+                    }
+                    
+                    // Last resort: use single period
+                    if (!Number.isFinite(netIncomeTTM)) {
+                        netIncomeTTM = netIncomeSinglePeriod;
+                    }
+                    
                     // Last resort fallback: Calculate EPS from net income if EPS not available
-                    if (!Number.isFinite(epsTTM) && Number.isFinite(netIncome) && Number.isFinite(shares) && shares > 0) {
-                        epsTTM = netIncome / shares;
-                        console.log('Calculated EPS from net income (QUARTERLY - needs TTM fix):', { netIncome, shares, epsTTM });
+                    if (!Number.isFinite(epsTTM) && Number.isFinite(netIncomeTTM) && Number.isFinite(shares) && shares > 0) {
+                        epsTTM = netIncomeTTM / shares;
+                        console.log('Calculated EPS from TTM net income:', { netIncomeTTM, shares, epsTTM });
                     }
                     
                     // Get shares for TTM calculation (prefer annual period shares)
@@ -1970,12 +2001,12 @@
                     }
                     
                     let roe = null;
-                    if (netIncome && equity && equity > 0) {
-                        roe = (netIncome / equity) * 100;
+                    if (netIncomeTTM && equity && equity > 0) {
+                        roe = (netIncomeTTM / equity) * 100;
                     }
                     
                     // Display ratios with logging
-                    console.log('Calculated ratios:', { pe, ps, pb, roe, currentStockPrice, epsTTM, revenueTTM, sharesTTM });
+                    console.log('Calculated ratios:', { pe, ps, pb, roe, currentStockPrice, epsTTM, revenueTTM, netIncomeTTM, sharesTTM });
                     document.getElementById('ratioPE').textContent = Number.isFinite(pe) ? `${pe.toFixed(2)}x` : 'N/A';
                     document.getElementById('ratioPS').textContent = Number.isFinite(ps) ? `${ps.toFixed(2)}x` : 'N/A';
                     document.getElementById('ratioPB').textContent = Number.isFinite(pb) ? `${pb.toFixed(2)}x` : 'N/A';

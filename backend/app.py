@@ -48,6 +48,59 @@ def _select_preferred_period(periods, period_metadata=None, prefer='10-K'):
     return sorted_periods[0]
 
 
+def _calculate_ttm_revenue(items, periods, period_metadata=None):
+    """Calculate TTM (Trailing Twelve Months) revenue by summing last 4 quarters or using most recent annual.
+    
+    Returns: (revenue_value, method_used)
+    method_used: 'ttm_4q', 'annual', 'single_period', or None
+    """
+    if not items or not periods:
+        return None, None
+    
+    # Identify quarterly and annual periods
+    quarterly_periods = []
+    annual_periods = []
+    
+    if period_metadata:
+        for pm in period_metadata:
+            if pm.get('type') == '10-Q' and pm.get('date') in periods:
+                quarterly_periods.append(pm['date'])
+            elif pm.get('type') == '10-K' and pm.get('date') in periods:
+                annual_periods.append(pm['date'])
+    
+    # Sort periods newest first
+    quarterly_periods = sorted(quarterly_periods, reverse=True)
+    annual_periods = sorted(annual_periods, reverse=True)
+    
+    # Try to sum last 4 quarters
+    if len(quarterly_periods) >= 4:
+        last_4_quarters = quarterly_periods[:4]
+        revenue_values = []
+        
+        for period in last_4_quarters:
+            rev, _ = extract_revenue(items, [period], prefer_period=period, cost_of_revenue=None)
+            if rev is not None:
+                revenue_values.append(rev)
+        
+        if len(revenue_values) == 4:
+            return sum(revenue_values), 'ttm_4q'
+    
+    # Fallback: use most recent annual
+    if annual_periods:
+        rev, _ = extract_revenue(items, annual_periods, prefer_period=annual_periods[0], cost_of_revenue=None)
+        if rev is not None:
+            return rev, 'annual'
+    
+    # Last resort: use most recent period
+    sorted_periods = sorted(periods, reverse=True)
+    if sorted_periods:
+        rev, _ = extract_revenue(items, sorted_periods, prefer_period=sorted_periods[0], cost_of_revenue=None)
+        if rev is not None:
+            return rev, 'single_period'
+    
+    return None, None
+
+
 def _select_best_revenue(items, periods, prefer_period=None):
     """Select the best revenue value using shared extraction logic.
     
@@ -1218,9 +1271,16 @@ def get_industry_comparison_stream():
                             income_stmt = (raw_payload or {}).get('income_statement') or {}
                             items = income_stmt.get('items') or []
                             periods = income_stmt.get('periods') or []
-                            
-                            # Use helper to select preferred period (prioritize 10-K annual data)
                             period_metadata = income_stmt.get('period_metadata')
+                            
+                            # Calculate TTM revenue instead of single period
+                            revenue_val, revenue_method = _calculate_ttm_revenue(items, periods, period_metadata)
+                            
+                            # Debug logging for revenue
+                            if revenue_val:
+                                print(f"[{ticker_upper}] Revenue (TTM): ${revenue_val:,.0f} via {revenue_method}")
+                            
+                            # Use helper to select preferred period for other metrics (prioritize 10-K annual data)
                             prefer_period = _select_preferred_period(periods, period_metadata, prefer='10-K')
                             
                             # Fallback to stored period_end_date if no metadata available
@@ -1235,13 +1295,6 @@ def get_industry_comparison_stream():
                                     if p in map_obj and map_obj[p] is not None:
                                         return map_obj[p]
                                 return None
-                            # Use improved revenue selection with priority ordering
-                            revenue_val, revenue_concept, revenue_confidence = _select_best_revenue(
-                                items, periods, prefer_period
-                            )
-                            # Debug logging for revenue
-                            if revenue_val:
-                                print(f"[{ticker_upper}] Revenue: ${revenue_val:,.0f} from {revenue_concept}")
                             
                             # Prioritize weighted average shares for market cap calculation
                             shares_candidates_priority = [
