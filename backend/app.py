@@ -827,6 +827,9 @@ def fetch_and_compute_live_data(ticker: str):
         print(f"[LIVE FETCH] Revenue: ${revenue:,.0f}" if revenue else "[LIVE FETCH] Revenue: None")
         print(f"[LIVE FETCH] Shares: {shares:,.0f}" if shares else "[LIVE FETCH] Shares: None")
         print(f"[LIVE FETCH] Metrics extracted: {list(metrics.keys())}")
+        
+        # Clean NaN/Inf values before returning
+        result = _clean_json_numbers(result)
         return result
         
     except Exception as e:
@@ -1125,13 +1128,19 @@ def get_stored_metrics(ticker):
         except Exception:
             periods = []
 
+        # Include revenue and shares from database for ratio calculations
+        revenue = fin.get('revenue')
+        shares_outstanding = fin.get('shares_outstanding')
+        
         return jsonify({
             "success": True,
             "data": {
                 "ticker": fin['ticker'],
                 "company_name": fin['company_name'],
                 "periods": periods,
-                "metrics": metrics
+                "metrics": metrics,
+                "revenue": revenue,  # TTM revenue from database
+                "shares_outstanding": shares_outstanding  # Shares from database
             }
         })
     except Exception as e:

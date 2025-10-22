@@ -1898,6 +1898,12 @@
                         revenueTTM = getRevenueFor(latestPeriod);
                     }
                     
+                    // Final fallback: use database TTM revenue if calculation failed
+                    if (!Number.isFinite(revenueTTM) && Number.isFinite(data.revenue)) {
+                        revenueTTM = data.revenue;
+                        console.log('Using database TTM revenue:', revenueTTM);
+                    }
+                    
                     // Helper to get EPS value for a period from stored metrics
                     const getEpsFor = (period) => {
                         const vB = epsBasicMap[period];
@@ -1979,6 +1985,12 @@
                     if (annualPeriods.length > 0) {
                         const annualShares = sharesItem?.values?.[annualPeriods[0]];
                         if (Number.isFinite(annualShares)) sharesTTM = annualShares;
+                    }
+                    
+                    // Final fallback: use database shares if calculation failed
+                    if (!Number.isFinite(sharesTTM) && Number.isFinite(data.shares_outstanding)) {
+                        sharesTTM = data.shares_outstanding;
+                        console.log('Using database shares outstanding:', sharesTTM);
                     }
                     
                     // Calculate P/E using TTM EPS
