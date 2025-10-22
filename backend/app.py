@@ -930,11 +930,17 @@ def get_stored_metrics(ticker):
             if not live_data:
                 return jsonify({"success": False, "error": "No stored metrics"}), 404
             
-            # Return live metrics
+            # Return live metrics (match database response structure)
             return jsonify({
                 "success": True,
-                "metrics": live_data.get('metrics', {}),
-                "periods": live_data.get('income_statement', {}).get('periods', []),
+                "data": {
+                    "ticker": ticker.upper(),
+                    "company_name": live_data.get('income_statement', {}).get('company_name', ticker.upper()),
+                    "metrics": live_data.get('metrics', {}),
+                    "periods": live_data.get('income_statement', {}).get('periods', []),
+                    "revenue": live_data.get('revenue'),
+                    "shares_outstanding": live_data.get('shares')
+                },
                 "from_database": False,
                 "live_fetch": True
             })
