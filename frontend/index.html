@@ -1906,29 +1906,41 @@
                     
                     // Calculate TTM EPS
                     let epsTTM = null;
-                    // Prefer sum of last four 10-Q EPS if available
-                    if (quarterlyPeriods.length >= 4) {
-                        const last4 = quarterlyPeriods.slice(0, 4);
+                    
+                    // Get all available EPS periods from the stored metrics (sorted newest first)
+                    const epsPeriodsAvailable = Object.keys(epsBasicMap).length > 0 
+                        ? Object.keys(epsBasicMap).sort().reverse() 
+                        : Object.keys(epsDilutedMap).sort().reverse();
+                    
+                    // Try to sum last 4 quarters of EPS from stored metrics
+                    if (epsPeriodsAvailable.length >= 4) {
+                        const last4 = epsPeriodsAvailable.slice(0, 4);
                         const vals = last4.map(getEpsFor).filter(v => Number.isFinite(v));
                         if (vals.length === 4) {
                             epsTTM = vals.reduce((a,b)=>a+b,0);
+                            console.log('Calculated TTM EPS from 4 quarters:', { periods: last4, values: vals, epsTTM });
                         }
                     }
-                    // Fallback: use most recent annual EPS
+                    
+                    // Fallback: use most recent annual EPS from metadata periods
                     if (!Number.isFinite(epsTTM) && annualPeriods.length > 0) {
                         const v = getEpsFor(annualPeriods[0]);
                         if (Number.isFinite(v)) epsTTM = v;
                     }
-                    // Fallback: if only latest quarter EPS available, annualize by *4
-                    if (!Number.isFinite(epsTTM) && quarterlyPeriods.length > 0) {
-                        const vq = getEpsFor(quarterlyPeriods[0]);
-                        if (Number.isFinite(vq)) epsTTM = vq * 4;
+                    
+                    // Fallback: use most recent EPS and annualize by *4
+                    if (!Number.isFinite(epsTTM) && epsPeriodsAvailable.length > 0) {
+                        const vq = getEpsFor(epsPeriodsAvailable[0]);
+                        if (Number.isFinite(vq)) {
+                            epsTTM = vq * 4;
+                            console.log('Annualized single quarter EPS:', { period: epsPeriodsAvailable[0], quarterEPS: vq, epsTTM });
+                        }
                     }
                     
                     // Last resort fallback: Calculate EPS from net income if EPS not available
                     if (!Number.isFinite(epsTTM) && Number.isFinite(netIncome) && Number.isFinite(shares) && shares > 0) {
                         epsTTM = netIncome / shares;
-                        console.log('Calculated EPS from net income:', { netIncome, shares, epsTTM });
+                        console.log('Calculated EPS from net income (QUARTERLY - needs TTM fix):', { netIncome, shares, epsTTM });
                     }
                     
                     // Get shares for TTM calculation (prefer annual period shares)
