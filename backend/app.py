@@ -1663,25 +1663,66 @@ def get_industry_comparison_stream():
                                 # Sanity check for extreme ratios - likely unit mismatch
                                 if ps_ratio > 1000:
                                     warnings.append(f"P/S ratio extremely high ({ps_ratio:.0f}x) - possible unit mismatch")
-                                    # Try to detect and fix unit mismatch
-                                    # If P/S > 1000, revenue might be in wrong units (e.g., actual dollars vs millions)
-                                    if ps_ratio > 100000:  # Likely revenue in actual dollars, should be scaled
-                                        revenue_val = revenue_val / 1000000  # Convert to millions
-                                        ps_ratio = float(market_cap) / float(revenue_val)
-                                        warnings.append(f"Auto-corrected revenue scale (now P/S = {ps_ratio:.2f}x)")
                             except Exception:
                                 ps_ratio = None
                     elif revenue_val is None:
                         warnings.append("Revenue not found in filings")
 
-                    # Try to compute additional ratios from stored raw_data metrics (if present)
+                    # Compute P/B and D/E ratios from stored raw_data metrics (if present)
                     try:
                         metrics = (raw_payload or {}).get('metrics') if raw_payload else None
-                        # Note: metrics often contain per-period maps; leave PB/DE/PCF to frontend which
-                        # selects appropriate period via /api/stored-metrics. Keep server values None.
-                        _ = metrics  # placeholder to avoid linter warnings
-                    except Exception:
-                        pass
+                        if metrics and isinstance(metrics, dict):
+                            # P/B Ratio: Market Cap / Equity
+                            equity_map = metrics.get('equity')
+                            if market_cap and equity_map and isinstance(equity_map, dict):
+                                equity_val = pick_value(equity_map)
+                                if equity_val and equity_val > 0:
+                                    pb_ratio = market_cap / equity_val
+                                    # Sanity check
+                                    if pb_ratio > 1000:
+                                        warnings.append(f"P/B ratio extremely high ({pb_ratio:.0f}x) - possible data issue")
+                                        pb_ratio = None
+                                elif equity_val and equity_val < 0:
+                                    warnings.append("Negative equity - P/B ratio not meaningful")
+                            
+                            # D/E Ratio: Debt / Equity
+                            debt_map = metrics.get('debt')
+                            if debt_map and equity_map and isinstance(debt_map, dict) and isinstance(equity_map, dict):
+                                debt_val = pick_value(debt_map)
+                                equity_val = pick_value(equity_map)
+                                if debt_val is not None and equity_val and equity_val != 0:
+                                    if equity_val > 0:
+                                        de_ratio = debt_val / equity_val
+                                        # Sanity check
+                                        if de_ratio > 100:
+                                            warnings.append(f"D/E ratio extremely high ({de_ratio:.0f}x) - possible data issue")
+                                            de_ratio = None
+                                    else:
+                                        warnings.append("Negative equity - D/E ratio not meaningful")
+                            
+                            # P/CF Ratio: Market Cap / Operating Cash Flow (TTM)
+                            ocf_map = metrics.get('operating_cash_flow')
+                            if market_cap and ocf_map and isinstance(ocf_map, dict):
+                                # Try to calculate TTM OCF by summing last 4 quarters
+                                ocf_periods = sorted([p for p in ocf_map.keys() if ocf_map[p] is not None], reverse=True)
+                                ocf_ttm = None
+                                if len(ocf_periods) >= 4:
+                                    # Sum last 4 periods
+                                    ocf_vals = [ocf_map[p] for p in ocf_periods[:4] if isinstance(ocf_map[p], (int, float))]
+                                    if len(ocf_vals) == 4:
+                                        ocf_ttm = sum(ocf_vals)
+                                elif ocf_periods:
+                                    # Use most recent value
+                                    ocf_ttm = ocf_map[ocf_periods[0]]
+                                
+                                if ocf_ttm and ocf_ttm > 0:
+                                    pcf_ratio = market_cap / ocf_ttm
+                                    # Sanity check
+                                    if pcf_ratio > 1000:
+                                        warnings.append(f"P/CF ratio extremely high ({pcf_ratio:.0f}x) - possible data issue")
+                                        pcf_ratio = None
+                    except Exception as e:
+                        print(f"[{ticker_upper}] Error computing P/B, D/E, P/CF: {e}")
                     
                     row = {
                         "ticker": ticker_upper,
@@ -1690,6 +1731,9 @@ def get_industry_comparison_stream():
                         "market_cap": market_cap,
                         "revenue": revenue_val,
                         "ps_ratio": ps_ratio,
+                        "pb_ratio": pb_ratio,
+                        "pcf_ratio": pcf_ratio,
+                        "de_ratio": de_ratio,
                         "shares_outstanding": shares_val,
                         "filing_date": financials['filing_date'],
                         "period_end_date": financials['period_end_date'],

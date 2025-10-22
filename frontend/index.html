@@ -522,6 +522,10 @@
                 ? `<span title="${company.warnings.join('; ')}" class="text-yellow-600 cursor-help">⚠️</span>` 
                 : '';
             
+            // Format P/B and D/E from backend if available
+            const pbDisplay = company.pb_ratio ? `${company.pb_ratio.toFixed(2)}x` : '…';
+            const deDisplay = company.de_ratio ? `${company.de_ratio.toFixed(2)}x` : '…';
+            
             row.innerHTML = `
                 <td class="px-6 py-4 text-sm font-medium text-blue-600">${company.ticker} ${warningIcon}</td>
                 <td class="px-6 py-4 text-sm text-gray-800">${company.company_name}</td>
@@ -529,8 +533,8 @@
                 <td class="px-6 py-4 text-sm text-gray-800 text-right">${formatCurrency(company.revenue)}</td>
                 <td class="px-6 py-4 text-sm text-gray-800 text-right">${company.ps_ratio ? company.ps_ratio.toFixed(2) + 'x' : 'N/A'}</td>
                 <td class="px-6 py-4 text-sm text-gray-800 text-right" data-field="pe">…</td>
-                <td class="px-6 py-4 text-sm text-gray-800 text-right" data-field="pb">…</td>
-                <td class="px-6 py-4 text-sm text-gray-800 text-right" data-field="de">…</td>
+                <td class="px-6 py-4 text-sm text-gray-800 text-right" data-field="pb" data-value="${company.pb_ratio || ''}">${pbDisplay}</td>
+                <td class="px-6 py-4 text-sm text-gray-800 text-right" data-field="de" data-value="${company.de_ratio || ''}">${deDisplay}</td>
             `;
             tbody.appendChild(row);
             // Fetch stored financial metrics for ratios with throttling and abort/timeout
@@ -590,20 +594,36 @@
                             return Number.isFinite(b) ? b : (Number.isFinite(d) ? d : null);
                         };
                         
-                        // Validate periods are consecutive quarters before summing
-                        const isQuarterly = (p) => {
-                            try {
-                                const date = new Date(p);
-                                const month = date.getMonth();
-                                // Quarters typically end in Mar(2), Jun(5), Sep(8), Dec(11)
-                                return [2, 5, 8, 11].includes(month);
-                            } catch {
-                                return false;
-                            }
-                        };
+                        // Identify quarterly and annual periods using metadata if available
+                        let quarterlyPeriods = [];
+                        let annualPeriods = [];
                         
-                        const quarterlyPeriods = periods.filter(isQuarterly);
-                        const annualPeriods = periods.filter(p => !isQuarterly(p));
+                        // Try to use period_metadata from stored data for accurate classification
+                        const periodMeta = data.period_metadata || [];
+                        if (periodMeta.length > 0) {
+                            quarterlyPeriods = periodMeta
+                                .filter(m => m && m.type === '10-Q')
+                                .map(m => m.date)
+                                .filter(p => periods.includes(p));
+                            annualPeriods = periodMeta
+                                .filter(m => m && m.type === '10-K')
+                                .map(m => m.date)
+                                .filter(p => periods.includes(p));
+                        } else {
+                            // Fallback: use month-based heuristic (less reliable for non-calendar fiscal years)
+                            const isQuarterly = (p) => {
+                                try {
+                                    const date = new Date(p);
+                                    const month = date.getMonth();
+                                    // Quarters typically end in Mar(2), Jun(5), Sep(8), Dec(11)
+                                    return [2, 5, 8, 11].includes(month);
+                                } catch {
+                                    return false;
+                                }
+                            };
+                            quarterlyPeriods = periods.filter(isQuarterly);
+                            annualPeriods = periods.filter(p => !isQuarterly(p));
+                        }
                         
                         // Try to sum 4 consecutive quarters for TTM
                         if (quarterlyPeriods.length >= 4) {
@@ -650,7 +670,9 @@
                             peCell.title = 'EPS data not available';
                         }
                     }
-                    if (pbCell) {
+                    // P/B and D/E are now provided by backend, but we can refine them if needed
+                    // Only update if backend didn't provide them
+                    if (pbCell && !pbCell.dataset.value) {
                         if (Number.isFinite(company.market_cap) && Number.isFinite(equity)) {
                             if (equity > 0) {
                                 const pb = company.market_cap / equity;
@@ -672,7 +694,7 @@
                             pbCell.title = 'Equity data not available';
                         }
                     }
-                    if (deCell) {
+                    if (deCell && !deCell.dataset.value) {
                         if (Number.isFinite(debt) && Number.isFinite(equity)) {
                             if (equity > 0) {
                                 const de = debt / equity;
@@ -1357,7 +1379,7 @@
             // 2. Price-to-Sales (P/S) - Revenue Multiple
             if (revenueContract || revenueGeneric) {
                 const psItem = {
-                    label: '📊 Price-to-Sales (P/S TTM)',
+                    label: '📊 Price-to-Sales (P/S)',
                     concept: 'calculated_ps_ratio',
                     values: {}
                 };
@@ -1377,7 +1399,7 @@
             // 3. Price-to-Earnings (P/E)
             if (epsBasicItem) {
                 const peItem = {
-                    label: '📈 Price-to-Earnings (P/E TTM)',
+                    label: '📈 Price-to-Earnings (P/E)',
                     concept: 'calculated_pe_ratio',
                     values: {}
                 };
@@ -1894,12 +1916,7 @@
                         const v = getRevenueFor(annualPeriods[0]);
                         if (Number.isFinite(v)) revenueTTM = v;
                     }
-                    // Fallback: if only latest quarter revenue available, annualize by *4
-                    if (!Number.isFinite(revenueTTM) && quarterlyPeriods.length > 0) {
-                        const vq = getRevenueFor(quarterlyPeriods[0]);
-                        if (Number.isFinite(vq)) revenueTTM = vq * 4;
-                    }
-                    // Last resort: use latest period
+                    // Last resort: use latest period (no annualization to avoid seasonal errors)
                     if (!Number.isFinite(revenueTTM)) {
                         revenueTTM = getRevenueFor(latestPeriod);
                     }
@@ -1941,12 +1958,12 @@
                         if (Number.isFinite(v)) epsTTM = v;
                     }
                     
-                    // Fallback: use most recent EPS and annualize by *4
+                    // Last resort: use most recent EPS (no annualization to avoid seasonal errors)
                     if (!Number.isFinite(epsTTM) && epsPeriodsAvailable.length > 0) {
                         const vq = getEpsFor(epsPeriodsAvailable[0]);
                         if (Number.isFinite(vq)) {
-                            epsTTM = vq * 4;
-                            console.log('Annualized single quarter EPS:', { period: epsPeriodsAvailable[0], quarterEPS: vq, epsTTM });
+                            epsTTM = vq;
+                            console.log('Using single period EPS (not annualized):', { period: epsPeriodsAvailable[0], eps: vq });
                         }
                     }
                     
@@ -1969,13 +1986,13 @@
                         netIncomeTTM = netIncomeMap[annualPeriods[0]];
                     }
                     
-                    // Fallback: annualize single quarter
+                    // Last resort: use single period (no annualization to avoid seasonal errors)
                     if (!Number.isFinite(netIncomeTTM) && netIncomePeriodsAvailable.length > 0) {
                         const vq = netIncomeMap[netIncomePeriodsAvailable[0]];
-                        if (Number.isFinite(vq)) netIncomeTTM = vq * 4;
+                        if (Number.isFinite(vq)) netIncomeTTM = vq;
                     }
                     
-                    // Last resort: use single period
+                    // Final fallback: use single period from pickValue
                     if (!Number.isFinite(netIncomeTTM)) {
                         netIncomeTTM = netIncomeSinglePeriod;
                     }

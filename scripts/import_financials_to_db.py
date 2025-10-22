@@ -469,6 +469,21 @@ def get_financial_data(ticker):
                     # Try Method 1: Calculate from par value
                     if shares is None and common_stock_value and par_value and par_value > 0:
                         shares = common_stock_value / par_value
+
+        # Prefer point-in-time balance sheet CommonStockSharesOutstanding when available
+        # even if we already obtained weighted-average shares from income statement.
+        if balance_df is not None and balance_sheet is not None:
+            try:
+                bs_periods = list(balance_sheet.periods)
+                if bs_periods:
+                    bs_latest = sorted(bs_periods, key=lambda x: x, reverse=True)[0]
+                    for _, row in balance_df.iterrows():
+                        if row.get('concept', '') == 'us-gaap_CommonStockSharesOutstanding':
+                            if bs_latest in row and row[bs_latest]:
+                                shares = float(row[bs_latest])
+                                break
+            except Exception:
+                pass
         
         # Method 3: If still no shares, try to derive from Net Income / EPS
         if not shares and income_df is not None and latest_period:

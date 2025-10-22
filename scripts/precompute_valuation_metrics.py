@@ -133,60 +133,101 @@ def compute_valuation_metrics(ticker: str, force: bool = False) -> Optional[Dict
     if market_cap and revenue and revenue > 0:
         ps_ratio = market_cap / revenue
     
+    # Helper: get latest period value by max ISO date key
+    def latest_value(map_obj):
+        try:
+            if isinstance(map_obj, dict) and map_obj:
+                latest_key = max(map_obj.keys())
+                return map_obj.get(latest_key)
+        except Exception:
+            pass
+        return None
+
+    # Helper: compute TTM sum from a per-period map by summing last 4 quarterly values if available,
+    # else use most recent annual value, else annualize latest period (if quarterly)
+    def ttm_sum(map_obj):
+        if not isinstance(map_obj, dict) or not map_obj:
+            return None
+        try:
+            periods_sorted = sorted(map_obj.keys(), reverse=True)
+            # Identify quarterly periods by month heuristic (03, 06, 09, 12)
+            def is_quarter(p):
+                try:
+                    m = int(str(p)[5:7])
+                    return m in (3, 6, 9, 12)
+                except Exception:
+                    return False
+            quarters = [p for p in periods_sorted if is_quarter(p)]
+            # Try 4 most recent quarters
+            vals = []
+            for p in quarters[:4]:
+                v = map_obj.get(p)
+                if isinstance(v, (int, float)):
+                    vals.append(float(v))
+            if len(vals) == 4:
+                return sum(vals)
+            # Fallback: use most recent non-null (assume annual)
+            for p in periods_sorted:
+                v = map_obj.get(p)
+                if isinstance(v, (int, float)):
+                    return float(v)
+        except Exception:
+            pass
+        return None
+
     # Calculate P/B ratio (Price to Book)
     pb_ratio = None
     if market_cap and metrics_data.get('equity'):
         equity_values = metrics_data['equity']
         if isinstance(equity_values, dict) and equity_values:
-            # Get most recent equity value
-            latest_equity = list(equity_values.values())[0]
+            latest_equity = latest_value(equity_values)
             if latest_equity and latest_equity > 0:
                 pb_ratio = market_cap / latest_equity
     
-    # Calculate P/CF ratio (Price to Cash Flow)
+    # Calculate P/CF ratio (Price to Cash Flow) using OCF TTM when available
     pcf_ratio = None
     if market_cap and metrics_data.get('operating_cash_flow'):
         ocf_values = metrics_data['operating_cash_flow']
         if isinstance(ocf_values, dict) and ocf_values:
-            latest_ocf = list(ocf_values.values())[0]
-            if latest_ocf and latest_ocf > 0:
-                pcf_ratio = market_cap / latest_ocf
+            ocf_ttm = ttm_sum(ocf_values)
+            if isinstance(ocf_ttm, (int, float)) and ocf_ttm > 0:
+                pcf_ratio = market_cap / ocf_ttm
     
-    # Calculate D/E ratio (Debt to Equity)
+    # Calculate D/E ratio (Debt to Equity) using latest period values
     de_ratio = None
     if metrics_data.get('debt') and metrics_data.get('equity'):
         debt_values = metrics_data['debt']
         equity_values = metrics_data['equity']
         if isinstance(debt_values, dict) and isinstance(equity_values, dict):
-            if debt_values and equity_values:
-                latest_debt = list(debt_values.values())[0]
-                latest_equity = list(equity_values.values())[0]
-                if latest_equity and latest_equity != 0:
-                    de_ratio = latest_debt / latest_equity if latest_debt else 0
+            latest_debt = latest_value(debt_values)
+            latest_equity = latest_value(equity_values)
+            if isinstance(latest_equity, (int, float)) and latest_equity != 0:
+                de_ratio = (latest_debt / latest_equity) if isinstance(latest_debt, (int, float)) else 0
     
-    # Calculate P/E ratio (Price to Earnings)
+    # Calculate P/E ratio (Price to Earnings) using EPS TTM when possible
     pe_ratio = None
-    net_income = None
-    eps_basic = None
-    
-    # Prefer stored metrics for EPS and net income
-    if metrics_data.get('eps_basic'):
-        eps_values = metrics_data['eps_basic']
-        if isinstance(eps_values, dict) and eps_values:
-            eps_basic = list(eps_values.values())[0]
-    
-    if metrics_data.get('net_income'):
-        ni_values = metrics_data['net_income']
-        if isinstance(ni_values, dict) and ni_values:
-            net_income = list(ni_values.values())[0]
-    
-    # Calculate P/E from EPS if available
-    if stock_price and eps_basic and eps_basic > 0:
-        pe_ratio = stock_price / eps_basic
-    # Fallback: calculate from net income and shares
-    elif market_cap and net_income and net_income > 0:
-        pe_ratio = market_cap / net_income
-    
+    eps_ttm = None
+    # Prefer basic EPS; fall back to diluted
+    eps_map = None
+    if isinstance(metrics_data.get('eps_basic'), dict) and metrics_data['eps_basic']:
+        eps_map = metrics_data['eps_basic']
+    elif isinstance(metrics_data.get('eps_diluted'), dict) and metrics_data['eps_diluted']:
+        eps_map = metrics_data['eps_diluted']
+    if eps_map:
+        # Compute EPS TTM using the same ttm_sum helper (sum of last 4 quarters)
+        eps_ttm = ttm_sum(eps_map)
+    # If EPS TTM not available, attempt net income TTM / shares
+    if eps_ttm is None and isinstance(metrics_data.get('net_income'), dict):
+        ni_ttm = ttm_sum(metrics_data['net_income'])
+        if ni_ttm and shares and shares > 0:
+            eps_ttm = ni_ttm / shares
+    if stock_price and eps_ttm and eps_ttm > 0:
+        pe_ratio = stock_price / eps_ttm
+        # Sanity check for extreme P/E ratios
+        if pe_ratio > 1000:
+            print(f"  WARNING: P/E ratio extremely high ({pe_ratio:.0f}x) - possible data issue")
+            pe_ratio = None
+
     # Build metrics dictionary
     valuation_metrics = {
         'stock_price': stock_price,
