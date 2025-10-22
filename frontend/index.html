@@ -1789,6 +1789,14 @@
                 const data = result.data;
                 const metrics = data.metrics || {};
                 const periods = Array.isArray(data.periods) ? data.periods : [];
+                
+                console.log('Stored metrics data:', { 
+                    hasEpsBasic: !!metrics.eps_basic, 
+                    hasEpsDiluted: !!metrics.eps_diluted,
+                    epsBasicKeys: metrics.eps_basic ? Object.keys(metrics.eps_basic) : [],
+                    epsDilutedKeys: metrics.eps_diluted ? Object.keys(metrics.eps_diluted) : [],
+                    allMetricKeys: Object.keys(metrics)
+                });
                     
                     // Find the most recent ANNUAL (10-K) period for ratio calculations
                     let latestPeriod = currentFinancialData.periods[0];
@@ -1915,6 +1923,12 @@
                     if (!Number.isFinite(epsTTM) && quarterlyPeriods.length > 0) {
                         const vq = getEpsFor(quarterlyPeriods[0]);
                         if (Number.isFinite(vq)) epsTTM = vq * 4;
+                    }
+                    
+                    // Last resort fallback: Calculate EPS from net income if EPS not available
+                    if (!Number.isFinite(epsTTM) && Number.isFinite(netIncome) && Number.isFinite(shares) && shares > 0) {
+                        epsTTM = netIncome / shares;
+                        console.log('Calculated EPS from net income:', { netIncome, shares, epsTTM });
                     }
                     
                     // Get shares for TTM calculation (prefer annual period shares)
