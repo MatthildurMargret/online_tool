@@ -36,6 +36,59 @@ load_dotenv(Path(__file__).parent.parent / "backend" / ".env")
 # Set Edgar identity
 set_identity("matthildur@montageventures.com")
 
+# Expanded list of revenue concepts to check
+REVENUE_CONCEPTS = [
+    'us-gaap_Revenues',
+    'us-gaap_SalesRevenueNet',
+    'us-gaap_SalesRevenueGoodsNet',
+    'us-gaap_RevenueFromContractWithCustomerExcludingAssessedTax',
+    'us-gaap_TotalRevenues',
+    'us-gaap_OperatingRevenue',
+    'us-gaap_Revenue',
+    'RevenueFromContractWithCustomer',
+    'Revenues',
+    'Revenue',
+]
+
+# Expanded list of share concepts to check (in priority order)
+SHARE_CONCEPTS = [
+    'us-gaap_WeightedAverageNumberOfSharesOutstandingBasic',
+    'us-gaap_WeightedAverageNumberOfDilutedSharesOutstanding',
+    'us-gaap_CommonStockSharesOutstanding',
+    'us-gaap_CommonSharesOutstanding',
+    'us-gaap_WeightedAverageSharesOutstanding',
+    'us-gaap_SharesOutstanding',
+]
+
+# Expanded list of EPS concepts (in priority order)
+EPS_CONCEPTS = [
+    'us-gaap_EarningsPerShareBasic',
+    'us-gaap_EarningsPerShareBasicAndDiluted',
+    'us-gaap_EarningsPerShareBasicFromContinuingOperations',
+]
+
+
+def find_revenue_row(df):
+    """
+    Find revenue row using fuzzy matching on labels and concepts.
+    Some filers use custom labels like "Net sales" or "Total operating revenue."
+    """
+    if df is None:
+        return None
+    
+    for _, row in df.iterrows():
+        label = (row.get("label") or "").lower()
+        concept = (row.get("concept") or "").lower()
+        
+        # Check if this looks like a total revenue line
+        if any(k in label for k in ["revenue", "net sales", "sales", "turnover"]) \
+           or any(k in concept for k in ["revenue", "sales"]):
+            # Exclude segment/component revenues
+            if not any(excl in label for excl in ["segment", "product", "service", "geography"]):
+                return row
+    return None
+
+
 # Try to import Alpaca for price validation (optional)
 try:
     from alpaca.data.historical import StockHistoricalDataClient
@@ -250,7 +303,7 @@ def get_financial_data(ticker):
             cash_flow = None
             cashflow_df = None
 
-        # Extract key metrics using shared revenue extraction logic
+        # Extract key metrics using TTM revenue calculation
         revenue = None
         shares = None
         
@@ -272,30 +325,96 @@ def get_financial_data(ticker):
                         item["values"][str(period)] = float(val) if val is not None and val != '' else None
                 items.append(item)
             
-            # Get cost of revenue for plausibility check
-            cor = None
-            for _, row in income_df.iterrows():
-                if row.get('concept') == 'us-gaap_CostOfRevenue':
-                    value = row.get(latest_period)
+            # Calculate TTM revenue using the period_metadata that will be created later
+            # For now, we need to identify quarterly vs annual periods
+            quarterly_periods = []
+            annual_periods = []
+            
+            # Map periods to filing types
+            for idx, filing in enumerate(all_filings):
+                filing_period_end = filing.period_of_report.isoformat() if hasattr(filing.period_of_report, 'isoformat') else str(filing.period_of_report)
+                filing_type = filing_metadata[idx]['type']
+                if filing_period_end in [str(p) for p in periods]:
+                    if filing_type == '10-Q':
+                        quarterly_periods.append(str(filing_period_end))
+                    elif filing_type == '10-K':
+                        annual_periods.append(str(filing_period_end))
+            
+            # Sort periods newest first
+            quarterly_periods = sorted(quarterly_periods, reverse=True)
+            annual_periods = sorted(annual_periods, reverse=True)
+            
+            # Try to sum last 4 quarters for TTM
+            revenue_method = None
+            if len(quarterly_periods) >= 4:
+                last_4_quarters = quarterly_periods[:4]
+                revenue_values = []
+                
+                for period in last_4_quarters:
+                    # Get cost of revenue for this period
+                    cor = None
+                    for _, row in income_df.iterrows():
+                        if row.get('concept') == 'us-gaap_CostOfRevenue':
+                            value = row.get(period)
+                            if value:
+                                cor = abs(float(value))
+                                break
+                    
+                    rev, _ = extract_revenue(items, [period], prefer_period=period, cost_of_revenue=cor)
+                    if rev is not None:
+                        revenue_values.append(rev)
+                
+                if len(revenue_values) == 4:
+                    revenue = sum(revenue_values)
+                    revenue_method = 'ttm_4q'
+            
+            # Fallback: use most recent annual
+            if revenue is None and annual_periods:
+                cor = None
+                for _, row in income_df.iterrows():
+                    if row.get('concept') == 'us-gaap_CostOfRevenue':
+                        value = row.get(annual_periods[0])
+                        if value:
+                            cor = abs(float(value))
+                            break
+                
+                revenue, _ = extract_revenue(items, annual_periods, prefer_period=annual_periods[0], cost_of_revenue=cor)
+                if revenue is not None:
+                    revenue_method = 'annual'
+            
+            # Last resort: use most recent period
+            if revenue is None:
+                cor = None
+                for _, row in income_df.iterrows():
+                    if row.get('concept') == 'us-gaap_CostOfRevenue':
+                        value = row.get(latest_period)
+                        if value:
+                            cor = abs(float(value))
+                            break
+                
+                revenue, _ = extract_revenue(items, [str(p) for p in periods], prefer_period=str(latest_period), cost_of_revenue=cor)
+                if revenue is not None:
+                    revenue_method = 'single_period'
+            
+            # Final fallback: Use fuzzy matching on labels if standard extraction failed
+            if revenue is None:
+                print(f"  ⚠️  Standard revenue extraction failed, trying fuzzy matching...")
+                revenue_row = find_revenue_row(income_df)
+                if revenue_row is not None and latest_period in revenue_row:
+                    value = revenue_row.get(latest_period)
                     if value:
-                        cor = abs(float(value))
-                        break
+                        revenue = abs(float(value))
+                        revenue_method = 'fuzzy_match'
+                        print(f"  ✓ Found revenue via fuzzy match: {revenue_row.get('label', 'Unknown')}")
             
-            # Use shared revenue extraction logic with new signature
-            revenue, revenue_metadata = extract_revenue(
-                items,
-                [str(p) for p in periods],
-                prefer_period=str(latest_period),
-                cost_of_revenue=cor
-            )
+            # Log the revenue calculation method
+            if revenue and revenue_method:
+                print(f"  Revenue (TTM): ${revenue:,.0f} via {revenue_method}")
+            elif revenue is None:
+                print(f"  ⚠️  Could not extract revenue for {ticker}")
             
-            # Shares: Use priority order (same as backend)
-            shares_priority = [
-                'us-gaap_WeightedAverageNumberOfSharesOutstandingBasic',
-                'us-gaap_WeightedAverageNumberOfDilutedSharesOutstanding',
-                'us-gaap_CommonStockSharesOutstanding'
-            ]
-            for concept in shares_priority:
+            # Shares: Use expanded priority list
+            for concept in SHARE_CONCEPTS:
                 for _, row in income_df.iterrows():
                     if row.get('concept', '') == concept:
                         if latest_period in row and row[latest_period]:
@@ -311,7 +430,7 @@ def get_financial_data(ticker):
                 latest_period = sorted(periods, key=lambda x: x, reverse=True)[0]
                 
                 # Try direct shares outstanding concepts first
-                for concept in shares_priority:
+                for concept in SHARE_CONCEPTS:
                     for _, row in balance_df.iterrows():
                         if row.get('concept', '') == concept:
                             if latest_period in row and row[latest_period]:
@@ -354,20 +473,32 @@ def get_financial_data(ticker):
         # Method 3: If still no shares, try to derive from Net Income / EPS
         if not shares and income_df is not None and latest_period:
             net_income = None
-            eps_basic = None
+            eps_value = None
             
+            # Get net income
             for _, row in income_df.iterrows():
                 concept = row.get('concept', '')
                 value = float(row[latest_period]) if latest_period in row and row[latest_period] else None
                 
                 if concept == 'us-gaap_NetIncomeLoss':
                     net_income = value
-                if concept == 'us-gaap_EarningsPerShareBasic':
-                    eps_basic = value
+                    break
+            
+            # Try expanded EPS concepts in priority order
+            for eps_concept in EPS_CONCEPTS:
+                for _, row in income_df.iterrows():
+                    if row.get('concept', '') == eps_concept:
+                        value = float(row[latest_period]) if latest_period in row and row[latest_period] else None
+                        if value is not None:
+                            eps_value = value
+                            break
+                if eps_value is not None:
+                    break
             
             # Calculate shares = Net Income / EPS
-            if net_income and eps_basic and eps_basic != 0:
-                shares = abs(net_income / eps_basic)  # abs() in case of net loss
+            if net_income and eps_value and eps_value != 0:
+                shares = abs(net_income / eps_value)  # abs() in case of net loss
+                print(f"  Shares derived from Net Income / EPS: {shares:,.0f}")
         
         # Method 4: If still no shares, use Company.shares_outstanding from Edgar facts
         if not shares:
@@ -377,6 +508,27 @@ def get_financial_data(ticker):
                     shares = float(company_shares)
             except Exception:
                 pass  # If shares_outstanding not available, continue without it
+        
+        # Scale detection: Handle shares reported in thousands
+        # Some filings report shares in thousands but don't indicate this clearly
+        if shares and revenue and alpaca_client:
+            try:
+                # Get current stock price for validation
+                request_params = StockLatestTradeRequest(symbol_or_symbols=ticker)
+                trades = alpaca_client.get_stock_latest_trade(request_params)
+                if ticker in trades:
+                    price = float(trades[ticker].price)
+                    market_cap = price * shares
+                    
+                    # If market cap is suspiciously low (< $1M for companies with significant revenue)
+                    # and revenue is substantial (> $100M), shares are likely in thousands
+                    if market_cap < 1e6 and revenue > 1e8:
+                        print(f"  ⚠️  Scale issue detected: Market cap ${market_cap:,.0f} too low for revenue ${revenue:,.0f}")
+                        print(f"  Adjusting shares from {shares:,.0f} to {shares * 1000:,.0f} (×1000)")
+                        shares *= 1000
+            except Exception as e:
+                # Don't fail the import if price fetch fails
+                pass
 
         # Get filing metadata from the most recent filing (first in list)
         most_recent_filing = all_filings[0]
@@ -408,28 +560,38 @@ def get_financial_data(ticker):
             return items
 
         # Build period_metadata to track which periods are 10-K vs 10-Q
-        period_metadata = []
+        # Sort periods: oldest to newest (left to right), with 10-K prioritized on the right
+        periods_with_types = []
         for period in income_statement.periods:
             period_str = str(period)
             filing_type = period_to_filing_type.get(period_str, 'unknown')
-            period_metadata.append({
+            periods_with_types.append({
                 'date': period_str,
                 'type': filing_type
             })
         
-        # Build raw_data with all statements
+        # Sort by date (oldest first), then by type (10-Q before 10-K)
+        # This ensures that if we have both 10-Q and 10-K for the same period,
+        # the 10-K appears to the right
+        periods_with_types.sort(key=lambda x: (x['date'], x['type'] == '10-K'))
+        
+        # Extract sorted periods and metadata
+        sorted_periods = [p['date'] for p in periods_with_types]
+        period_metadata = periods_with_types
+        
+        # Build raw_data with all statements using sorted periods
         raw_data = {
             "income_statement": {
-                "periods": [str(p) for p in income_statement.periods],
-                "items": df_to_items(income_df, income_statement.periods)
+                "periods": sorted_periods,
+                "items": df_to_items(income_df, sorted_periods)
             },
             "balance_sheet": {
-                "periods": [str(p) for p in balance_sheet.periods] if balance_sheet else [],
-                "items": df_to_items(balance_df, balance_sheet.periods) if balance_sheet else []
+                "periods": sorted_periods if balance_sheet else [],
+                "items": df_to_items(balance_df, sorted_periods) if balance_sheet else []
             },
             "cash_flow": {
-                "periods": [str(p) for p in cash_flow.periods] if cash_flow else [],
-                "items": df_to_items(cashflow_df, cash_flow.periods) if cash_flow else []
+                "periods": sorted_periods if cash_flow else [],
+                "items": df_to_items(cashflow_df, sorted_periods) if cash_flow else []
             },
             "period_metadata": period_metadata,
             "metrics": {
@@ -468,7 +630,7 @@ def get_financial_data(ticker):
             if total_assets_row is not None and total_liabilities_row is not None and balance_sheet is not None:
                 # Calculate equity = assets - liabilities for each period
                 equity_row = {}
-                for p in balance_sheet.periods:
+                for p in sorted_periods:
                     if p in total_assets_row and p in total_liabilities_row:
                         assets_val = total_assets_row[p]
                         liab_val = total_liabilities_row[p]
@@ -478,7 +640,7 @@ def get_financial_data(ticker):
                     equity_row = None
         if equity_row is not None and balance_sheet is not None:
             eq = {}
-            for p in balance_sheet.periods:
+            for p in sorted_periods:
                 if p in equity_row:
                     v = equity_row[p]
                     eq[str(p)] = float(v) if v not in (None, '') else None
@@ -499,7 +661,7 @@ def get_financial_data(ticker):
         ])
         if balance_sheet is not None and (debt_cur_row is not None or debt_nc_row is not None):
             debt = {}
-            for p in balance_sheet.periods:
+            for p in sorted_periods:
                 total = 0.0
                 has_val = False
                 if debt_cur_row is not None and p in debt_cur_row and debt_cur_row[p] not in (None, ''):
@@ -541,8 +703,7 @@ def get_financial_data(ticker):
                 pass
         if ocf_row is not None and (cash_flow is not None or income_statement is not None):
             ocf = {}
-            periods_source = cash_flow.periods if cash_flow is not None else income_statement.periods
-            for p in periods_source:
+            for p in sorted_periods:
                 if p in ocf_row:
                     v = ocf_row[p]
                     ocf[str(p)] = float(v) if v not in (None, '') else None
@@ -556,7 +717,7 @@ def get_financial_data(ticker):
         ])
         if net_income_row is not None and income_statement is not None:
             ni = {}
-            for p in income_statement.periods:
+            for p in sorted_periods:
                 if p in net_income_row and net_income_row[p] not in (None, ''):
                     ni[str(p)] = float(net_income_row[p])
             if ni:  # Only add if we found values
@@ -568,7 +729,7 @@ def get_financial_data(ticker):
         
         if eps_basic_row is not None and income_statement is not None:
             eps_b = {}
-            for p in income_statement.periods:
+            for p in sorted_periods:
                 if p in eps_basic_row and eps_basic_row[p] not in (None, ''):
                     eps_b[str(p)] = float(eps_basic_row[p])
             if eps_b:  # Only add if we found values
@@ -576,7 +737,7 @@ def get_financial_data(ticker):
         
         if eps_diluted_row is not None and income_statement is not None:
             eps_d = {}
-            for p in income_statement.periods:
+            for p in sorted_periods:
                 if p in eps_diluted_row and eps_diluted_row[p] not in (None, ''):
                     eps_d[str(p)] = float(eps_diluted_row[p])
             if eps_d:  # Only add if we found values

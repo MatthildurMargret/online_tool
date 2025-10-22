@@ -604,18 +604,251 @@ def get_all_financial_statements(ticker: str):
     return result
 
 
+def fetch_and_compute_live_data(ticker: str):
+    """
+    Fetch financial data on-the-fly from Edgar and compute all metrics.
+    Returns the same structure as stored data for consistency.
+    """
+    try:
+        from edgar import Company
+        from edgar.xbrl import XBRLS
+        
+        print(f"[LIVE FETCH] Starting for {ticker}...")
+        c = Company(ticker)
+        
+        # Fetch latest annual (10-K) and last 4 quarterly (10-Q) filings
+        annual_filing = c.get_filings(form="10-K").latest(1)
+        quarterly_filing_list = c.get_filings(form="10-Q").latest(4)
+        
+        if not annual_filing:
+            print(f"[LIVE FETCH] No 10-K filing found for {ticker}")
+            return None
+        
+        # Combine filings
+        all_filings = [annual_filing]
+        filing_metadata = [{'type': '10-K'}]
+        
+        if quarterly_filing_list:
+            for filing in quarterly_filing_list:
+                all_filings.append(filing)
+                filing_metadata.append({'type': '10-Q'})
+        
+        # Get XBRL data
+        xbs = XBRLS.from_filings(all_filings)
+        income_statement = xbs.statements.income_statement()
+        income_df = income_statement.to_dataframe()
+        
+        # Try to get balance sheet and cash flow
+        try:
+            balance_sheet = xbs.statements.balance_sheet()
+            balance_df = balance_sheet.to_dataframe()
+        except:
+            balance_sheet = None
+            balance_df = None
+        
+        try:
+            cash_flow = xbs.statements.cash_flow_statement()
+            cashflow_df = cash_flow.to_dataframe()
+        except:
+            cash_flow = None
+            cashflow_df = None
+        
+        # Extract periods and build metadata
+        periods = list(income_statement.periods)
+        period_to_filing_type = {}
+        
+        for idx, filing in enumerate(all_filings):
+            filing_period_end = filing.period_of_report.isoformat() if hasattr(filing.period_of_report, 'isoformat') else str(filing.period_of_report)
+            period_to_filing_type[filing_period_end] = filing_metadata[idx]['type']
+        
+        # Build period metadata with sorting
+        periods_with_types = []
+        for period in periods:
+            period_str = str(period)
+            filing_type = period_to_filing_type.get(period_str, 'unknown')
+            periods_with_types.append({
+                'date': period_str,
+                'type': filing_type
+            })
+        
+        # Sort periods: oldest to newest (left to right), with 10-K prioritized on the right
+        periods_with_types.sort(key=lambda x: (x['date'], x['type'] == '10-K'))
+        sorted_periods = [p['date'] for p in periods_with_types]
+        period_metadata = periods_with_types
+        
+        # Convert dataframes to items format
+        def df_to_items(df, periods):
+            items = []
+            if df is None:
+                return items
+            for _, row in df.iterrows():
+                item = {
+                    "label": row.get("label", ""),
+                    "concept": row.get("concept", ""),
+                    "values": {}
+                }
+                for period in periods:
+                    if period in row:
+                        val = row[period]
+                        item["values"][str(period)] = float(val) if val is not None and val != '' else None
+                items.append(item)
+            return items
+        
+        income_items = df_to_items(income_df, sorted_periods)
+        balance_items = df_to_items(balance_df, sorted_periods) if balance_df is not None else []
+        cashflow_items = df_to_items(cashflow_df, sorted_periods) if cashflow_df is not None else []
+        
+        # Calculate TTM revenue
+        quarterly_periods = [p['date'] for p in period_metadata if p['type'] == '10-Q']
+        annual_periods = [p['date'] for p in period_metadata if p['type'] == '10-K']
+        quarterly_periods = sorted(quarterly_periods, reverse=True)
+        annual_periods = sorted(annual_periods, reverse=True)
+        
+        revenue = None
+        if len(quarterly_periods) >= 4:
+            # Sum last 4 quarters
+            revenue_values = []
+            for period in quarterly_periods[:4]:
+                rev, _ = _select_best_revenue(income_items, [period], prefer_period=period)
+                if rev:
+                    revenue_values.append(rev)
+            if len(revenue_values) == 4:
+                revenue = sum(revenue_values)
+        
+        if revenue is None and annual_periods:
+            revenue, _, _ = _select_best_revenue(income_items, annual_periods, prefer_period=annual_periods[0])
+        
+        # Extract shares
+        shares = None
+        latest_period = sorted_periods[-1] if sorted_periods else None
+        if latest_period:
+            shares_concepts = [
+                'us-gaap_WeightedAverageNumberOfSharesOutstandingBasic',
+                'us-gaap_WeightedAverageNumberOfDilutedSharesOutstanding',
+                'us-gaap_CommonStockSharesOutstanding'
+            ]
+            for concept in shares_concepts:
+                for item in income_items:
+                    if item['concept'] == concept:
+                        val = item['values'].get(latest_period)
+                        if val:
+                            shares = val
+                            break
+                if shares:
+                    break
+        
+        # Build metrics from balance sheet and cash flow
+        metrics = {}
+        
+        # Helper to extract metric values
+        def extract_metric(items, concepts, periods):
+            result = {}
+            for concept in concepts:
+                for item in items:
+                    if item['concept'] == concept:
+                        for period in periods:
+                            val = item['values'].get(period)
+                            if val is not None:
+                                result[period] = val
+                        if result:
+                            return result
+            return result
+        
+        # Equity
+        if balance_items:
+            equity = extract_metric(balance_items, [
+                'us-gaap_StockholdersEquity',
+                'us-gaap_StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'
+            ], sorted_periods)
+            if equity:
+                metrics['equity'] = equity
+        
+        # Debt
+        if balance_items:
+            debt_current = extract_metric(balance_items, ['us-gaap_DebtCurrent'], sorted_periods)
+            debt_noncurrent = extract_metric(balance_items, ['us-gaap_LongTermDebtNoncurrent'], sorted_periods)
+            debt = {}
+            for period in sorted_periods:
+                total = 0
+                if period in debt_current:
+                    total += debt_current[period]
+                if period in debt_noncurrent:
+                    total += debt_noncurrent[period]
+                if total > 0:
+                    debt[period] = total
+            if debt:
+                metrics['debt'] = debt
+        
+        # Operating cash flow
+        if cashflow_items:
+            ocf = extract_metric(cashflow_items, [
+                'us-gaap_NetCashProvidedByUsedInOperatingActivities'
+            ], sorted_periods)
+            if ocf:
+                metrics['operating_cash_flow'] = ocf
+        
+        # Net income
+        net_income = extract_metric(income_items, ['us-gaap_NetIncomeLoss'], sorted_periods)
+        if net_income:
+            metrics['net_income'] = net_income
+        
+        # Build response structure
+        result = {
+            'income_statement': {
+                'ticker': ticker.upper(),
+                'company_name': c.name,
+                'periods': sorted_periods,
+                'period_metadata': period_metadata,
+                'items': income_items
+            },
+            'balance_sheet': {
+                'periods': sorted_periods,
+                'items': balance_items
+            },
+            'cash_flow': {
+                'periods': sorted_periods,
+                'items': cashflow_items
+            },
+            'metrics': metrics,
+            'revenue': revenue,
+            'shares': shares
+        }
+        
+        print(f"[LIVE FETCH] Successfully fetched data for {ticker}")
+        return result
+        
+    except Exception as e:
+        print(f"[LIVE FETCH] Error fetching data for {ticker}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
 @app.route("/api/income/<ticker>", methods=["GET"])
 def get_income(ticker):
-    """API endpoint to get the most recent income statement - pulls from Supabase database"""
+    """API endpoint to get the most recent income statement - pulls from Supabase database or fetches on-the-fly"""
     try:
         # Try to get from Supabase first
         fin = get_company_financials(ticker.upper())
         
         if not fin or not fin.get('raw_data'):
+            # Data not in database - fetch on-the-fly from Edgar
+            print(f"[ON-THE-FLY] Fetching data for {ticker.upper()} from Edgar...")
+            live_data = fetch_and_compute_live_data(ticker.upper())
+            
+            if not live_data:
+                return jsonify({
+                    "success": False,
+                    "error": f"No data found for {ticker}. Company may not exist or have no filings."
+                }), 404
+            
+            # Return the live data
             return jsonify({
-                "success": False,
-                "error": f"No data found for {ticker}. Please import data first."
-            }), 404
+                "success": True,
+                "data": live_data.get('income_statement'),
+                "from_database": False,
+                "live_fetch": True
+            })
         
         # Parse the stored data
         raw_payload = fin['raw_data']
@@ -670,12 +903,26 @@ def get_income(ticker):
 @app.route("/api/stored-metrics/<ticker>", methods=["GET"])
 def get_stored_metrics(ticker):
     """Fast endpoint to return stored metrics (equity, debt, operating cash flow, net income) from DB raw_data.
-    Does not call external APIs. Returns periods list and metrics by period when available.
+    Falls back to live fetch if not in database.
     """
     try:
         fin = get_company_financials(ticker.upper())
         if not fin or not fin.get('raw_data'):
-            return jsonify({"success": False, "error": "No stored metrics"}), 404
+            # Try live fetch
+            print(f"[ON-THE-FLY] Fetching metrics for {ticker.upper()} from Edgar...")
+            live_data = fetch_and_compute_live_data(ticker.upper())
+            
+            if not live_data:
+                return jsonify({"success": False, "error": "No stored metrics"}), 404
+            
+            # Return live metrics
+            return jsonify({
+                "success": True,
+                "metrics": live_data.get('metrics', {}),
+                "periods": live_data.get('income_statement', {}).get('periods', []),
+                "from_database": False,
+                "live_fetch": True
+            })
 
         raw_payload = fin['raw_data']
         if isinstance(raw_payload, str):
@@ -1586,21 +1833,21 @@ def get_industry_comparison():
                     "cached": False
                 }
                 
-                # Get most recent ANNUAL period (10-K) if available
+                # Calculate TTM revenue instead of single period
+                revenue_value = None
+                if cached_income.get("items"):
+                    revenue_value, revenue_method = _calculate_ttm_revenue(
+                        cached_income.get("items", []),
+                        cached_income.get("periods", []),
+                        cached_income.get("period_metadata")
+                    )
+                
+                # Get most recent ANNUAL period (10-K) for other metrics
                 annual_period = _select_preferred_period(
                     cached_income.get("periods", []),
                     cached_income.get("period_metadata"),
                     prefer='10-K'
                 )
-                
-                # Use shared revenue extraction logic
-                revenue_value = None
-                if annual_period and cached_income.get("items"):
-                    revenue_value, _, _ = _select_best_revenue(
-                        cached_income.get("items", []),
-                        cached_income.get("periods", []),
-                        prefer_period=annual_period
-                    )
                 
                 # Find first shares item with a non-null value for the annual period
                 shares_candidates = [
@@ -1708,7 +1955,7 @@ def cache_tickers():
                 except (TypeError, AttributeError):
                     periods_list = [col for col in income_df.columns if col not in ['label', 'concept']]
                 
-                # Get the period date
+                # Get the period date and build metadata
                 filing_types = {}
                 try:
                     period_10k = filing_10k[0].period_of_report
@@ -1716,8 +1963,22 @@ def cache_tickers():
                 except:
                     pass
                 
-                # Sort periods
-                sorted_periods = sorted(periods_list, key=lambda x: x, reverse=True)
+                # Build period metadata with types
+                periods_with_types = []
+                for period in periods_list:
+                    period_str = str(period)
+                    filing_type = filing_types.get(period_str, '10-K')
+                    periods_with_types.append({
+                        'date': period_str,
+                        'type': filing_type
+                    })
+                
+                # Sort periods: oldest to newest (left to right), with 10-K prioritized on the right
+                periods_with_types.sort(key=lambda x: (x['date'], x['type'] == '10-K'))
+                
+                # Extract sorted periods and metadata
+                sorted_periods = [p['date'] for p in periods_with_types]
+                period_metadata = periods_with_types
                 
                 # Convert to result format
                 result_data = []
@@ -1731,13 +1992,6 @@ def cache_tickers():
                         if period in row:
                             item["values"][period] = float(row[period]) if row[period] else None
                     result_data.append(item)
-                
-                period_metadata = []
-                for period in sorted_periods:
-                    period_metadata.append({
-                        "date": period,
-                        "type": filing_types.get(period, "10-K")
-                    })
                 
                 response_data = {
                     "ticker": ticker_upper,
