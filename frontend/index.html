@@ -1762,8 +1762,7 @@
                 const response = await fetch(`${API_URL}/api/stored-metrics/${ticker}`);
                 const result = await response.json();
                 
-                if (!result.success) return;
-                // Always show the ratios grid; fill with N/A if we can't compute yet
+                // Always show the ratios grid
                 const ratiosEl = document.getElementById('stockRatiosInline');
                 if (ratiosEl) ratiosEl.classList.remove('hidden');
 
@@ -1776,8 +1775,16 @@
                 };
                 setNA();
 
+                if (!result.success) {
+                    console.warn('Stored metrics fetch failed:', result.error);
+                    return;
+                }
+
                 // If we don't yet have the financial data structure, wait for it
-                if (!currentFinancialData) return;
+                if (!currentFinancialData) {
+                    console.warn('No currentFinancialData available yet');
+                    return;
+                }
 
                 const data = result.data;
                 const metrics = data.metrics || {};
@@ -1941,14 +1948,15 @@
                         roe = (netIncome / equity) * 100;
                     }
                     
-                    // Display ratios
+                    // Display ratios with logging
+                    console.log('Calculated ratios:', { pe, ps, pb, roe, currentStockPrice, epsTTM, revenueTTM, sharesTTM });
                     document.getElementById('ratioPE').textContent = Number.isFinite(pe) ? `${pe.toFixed(2)}x` : 'N/A';
                     document.getElementById('ratioPS').textContent = Number.isFinite(ps) ? `${ps.toFixed(2)}x` : 'N/A';
                     document.getElementById('ratioPB').textContent = Number.isFinite(pb) ? `${pb.toFixed(2)}x` : 'N/A';
                     document.getElementById('ratioROE').textContent = Number.isFinite(roe) ? `${roe.toFixed(1)}%` : 'N/A';
                 
             } catch (error) {
-                console.warn('Failed to fetch ratios:', error);
+                console.error('Failed to fetch ratios:', error);
             }
         }
 
@@ -2031,7 +2039,8 @@
                     });
                 }
             } else {
-                // Fallback: Add columns for each period (old behavior)
+                // Fallback: Detect quarterly vs annual from period end dates
+                // Annual reports typically end in Dec (month 11), quarterly can be Mar/Jun/Sep/Dec
                 if (tableHeader) {
                     data.periods.forEach((period, index) => {
                         const th = document.createElement('th');
@@ -2041,7 +2050,13 @@
                             month: 'short', 
                             year: 'numeric' 
                         });
-                        th.textContent = `Period ${index + 1} (${formatted})`;
+                        
+                        // Heuristic: If month is December, likely annual; otherwise quarterly
+                        const month = date.getMonth();
+                        const isLikelyAnnual = (month === 11); // December = month 11
+                        const label = isLikelyAnnual ? 'Annual' : 'Quarterly';
+                        
+                        th.textContent = `${label} (${formatted})`;
                         tableHeader.appendChild(th);
                     });
                 }
@@ -2218,7 +2233,8 @@
                     });
                 }
             } else {
-                // Fallback: Add columns for each period (old behavior)
+                // Fallback: Detect quarterly vs annual from period end dates
+                // Annual reports typically end in Dec (month 11), quarterly can be Mar/Jun/Sep/Dec
                 if (tableHeader) {
                     data.periods.forEach((period, index) => {
                         const th = document.createElement('th');
@@ -2228,7 +2244,13 @@
                             month: 'short', 
                             year: 'numeric' 
                         });
-                        th.textContent = `Period ${index + 1} (${formatted})`;
+                        
+                        // Heuristic: If month is December, likely annual; otherwise quarterly
+                        const month = date.getMonth();
+                        const isLikelyAnnual = (month === 11); // December = month 11
+                        const label = isLikelyAnnual ? 'Annual' : 'Quarterly';
+                        
+                        th.textContent = `${label} (${formatted})`;
                         tableHeader.appendChild(th);
                     });
                 }
