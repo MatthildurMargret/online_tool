@@ -1326,116 +1326,187 @@
         }
 
         function addRevenueMultiples(data) {
-            // Find key financial metrics
-            const revenueContract = data.items.find(item => item.concept === 'us-gaap_RevenueFromContractWithCustomerExcludingAssessedTax');
-            const revenueGeneric = data.items.find(item => item.concept === 'us-gaap_Revenues');
-            // Helper: pick first non-null per period between contract revenue and generic revenues
-            const revenueForPeriod = (period) => {
-                const v1 = revenueContract && revenueContract.values ? revenueContract.values[period] : undefined;
-                if (Number.isFinite(v1)) return v1;
-                const v2 = revenueGeneric && revenueGeneric.values ? revenueGeneric.values[period] : undefined;
-                return Number.isFinite(v2) ? v2 : null;
-            };
+            // ⚠️ CRITICAL: This function calculates price-based ratios using CURRENT stock price with TTM metrics
+            // Ratios are only calculated for the most recent period using TTM (Trailing Twelve Months) data
             
-            const sharesItem = data.items.find(item => 
-                item.concept === 'us-gaap_WeightedAverageNumberOfSharesOutstandingBasic' ||
-                item.concept === 'us-gaap_CommonStockSharesOutstanding'
-            );
-            
-            const netIncomeItem = data.items.find(item => 
-                item.concept === 'us-gaap_NetIncomeLoss'
-            );
-
-            const epsBasicItem = data.items.find(item => 
-                item.concept === 'us-gaap_EarningsPerShareBasic'
-            );
-
             const calculatedItems = [];
-
-            // 1. Market Cap
-            const marketCapItem = {
-                label: '💰 Market Cap',
-                concept: 'calculated_market_cap',
-                values: {}
-            };
             
-            // Helper to get shares for a period with fallback to additionalFinancialData.metrics.shares
+            // Determine the most recent period
+            const mostRecentPeriod = data.periods && data.periods.length > 0 ? data.periods[0] : null;
+            
+            if (!currentStockPrice || !mostRecentPeriod) {
+                // Can't calculate ratios without price
+                return;
+            }
+            
+            // Get period metadata to identify quarterly vs annual periods
+            const meta = Array.isArray(data.period_metadata) ? data.period_metadata : [];
+            const periodsOrdered = Array.isArray(data.periods) ? data.periods.slice() : [];
+            
+            // Identify quarterly and annual periods from metadata
+            const quarterlyPeriods = meta
+                .filter(m => m && m.type === '10-Q')
+                .map(m => m.date)
+                .filter(p => periodsOrdered.includes(p));
+            const annualPeriods = meta
+                .filter(m => m && m.type === '10-K')
+                .map(m => m.date)
+                .filter(p => periodsOrdered.includes(p));
+            
+            // Helper to get shares for a period
             const getShares = (period) => {
+                const sharesItem = data.items.find(item => 
+                    item.concept === 'us-gaap_WeightedAverageNumberOfSharesOutstandingBasic' ||
+                    item.concept === 'us-gaap_CommonStockSharesOutstanding'
+                );
                 const fromIncome = sharesItem && sharesItem.values ? sharesItem.values[period] : null;
                 if (Number.isFinite(fromIncome)) return fromIncome;
                 const sharesMap = (additionalFinancialData && additionalFinancialData.metrics) ? additionalFinancialData.metrics.shares : null;
                 if (sharesMap && sharesMap.hasOwnProperty(period) && Number.isFinite(sharesMap[period])) return sharesMap[period];
                 return null;
             };
-
-            data.periods.forEach(period => {
-                const shares = getShares(period);
-                if (Number.isFinite(shares) && currentStockPrice) {
-                    marketCapItem.values[period] = currentStockPrice * shares;
-                }
-            });
-            calculatedItems.push(marketCapItem);
             
-            // 2. Price-to-Sales (P/S) - Revenue Multiple
-            if (revenueContract || revenueGeneric) {
+            // Helper to calculate TTM sum
+            const calculateTTM = (getValueForPeriod) => {
+                // Try to sum last 4 quarters
+                if (quarterlyPeriods.length >= 4) {
+                    const last4 = quarterlyPeriods.slice(0, 4);
+                    const vals = last4.map(getValueForPeriod).filter(v => Number.isFinite(v));
+                    if (vals.length === 4) {
+                        return vals.reduce((a, b) => a + b, 0);
+                    }
+                }
+                // Fallback: use most recent annual
+                if (annualPeriods.length > 0) {
+                    const v = getValueForPeriod(annualPeriods[0]);
+                    if (Number.isFinite(v)) return v;
+                }
+                // Last resort: use latest period
+                return getValueForPeriod(mostRecentPeriod);
+            };
+            
+            // Revenue concepts to search for
+            const revenueConcepts = [
+                'us-gaap_RevenueFromContractWithCustomerExcludingAssessedTax',
+                'us-gaap_RevenueFromContractWithCustomerIncludingAssessedTax',
+                'us-gaap_Revenues',
+                'us-gaap_SalesRevenueNet',
+                'us-gaap_Revenue',
+                'us-gaap_RevenuesNetOfInterestExpense',
+                'us-gaap_RegulatedAndUnregulatedOperatingRevenue'
+            ];
+            
+            // Helper to get revenue for a specific period
+            const getRevenueFor = (period) => {
+                for (const item of data.items || []) {
+                    if (revenueConcepts.includes(item.concept)) {
+                        const val = item.values?.[period];
+                        if (Number.isFinite(val)) return val;
+                    }
+                }
+                return null;
+            };
+            
+            // Helper to get EPS for a specific period
+            const getEpsFor = (period) => {
+                const epsBasicItem = data.items.find(item => item.concept === 'us-gaap_EarningsPerShareBasic');
+                const epsBasicMap = (additionalFinancialData && additionalFinancialData.metrics) ? additionalFinancialData.metrics.eps_basic : null;
+                
+                // Try from income statement first
+                if (epsBasicItem && epsBasicItem.values) {
+                    const val = epsBasicItem.values[period];
+                    if (Number.isFinite(val)) return val;
+                }
+                // Try from stored metrics
+                if (epsBasicMap && epsBasicMap.hasOwnProperty(period)) {
+                    const val = epsBasicMap[period];
+                    if (Number.isFinite(val)) return val;
+                }
+                return null;
+            };
+            
+            // Calculate TTM Revenue
+            const revenueTTM = calculateTTM(getRevenueFor);
+            
+            // Calculate TTM EPS
+            let epsTTM = calculateTTM(getEpsFor);
+            
+            // If EPS not available, calculate from net income / shares
+            if (!Number.isFinite(epsTTM)) {
+                const netIncomeItem = data.items.find(item => item.concept === 'us-gaap_NetIncomeLoss');
+                const getNetIncomeFor = (period) => {
+                    if (netIncomeItem && netIncomeItem.values) {
+                        const val = netIncomeItem.values[period];
+                        if (Number.isFinite(val)) return val;
+                    }
+                    return null;
+                };
+                const netIncomeTTM = calculateTTM(getNetIncomeFor);
+                const shares = getShares(mostRecentPeriod);
+                if (Number.isFinite(netIncomeTTM) && Number.isFinite(shares) && shares > 0) {
+                    epsTTM = netIncomeTTM / shares;
+                }
+            }
+            
+            // Get shares for market cap calculation
+            const shares = getShares(mostRecentPeriod);
+            
+            // 1. Market Cap (using current price and shares)
+            if (Number.isFinite(shares)) {
+                const marketCapItem = {
+                    label: '💰 Market Cap (Current)',
+                    concept: 'calculated_market_cap',
+                    values: {}
+                };
+                marketCapItem.values[mostRecentPeriod] = currentStockPrice * shares;
+                calculatedItems.push(marketCapItem);
+            }
+            
+            // 2. Price-to-Sales (P/S) - using TTM Revenue
+            if (Number.isFinite(revenueTTM) && Number.isFinite(shares) && revenueTTM > 0) {
                 const psItem = {
-                    label: '📊 Price-to-Sales (P/S)',
+                    label: '📊 Price-to-Sales (P/S, TTM)',
                     concept: 'calculated_ps_ratio',
                     values: {}
                 };
-                
-                data.periods.forEach(period => {
-                    const revenue = revenueForPeriod(period);
-                    const shares = getShares(period);
-                    if (Number.isFinite(revenue) && Number.isFinite(shares) && currentStockPrice) {
-                        const marketCap = currentStockPrice * shares;
-                        const ps = marketCap / revenue;
-                        psItem.values[period] = Number.isFinite(ps) ? ps : null;
-                    }
-                });
+                const marketCap = currentStockPrice * shares;
+                const ps = marketCap / revenueTTM;
+                psItem.values[mostRecentPeriod] = Number.isFinite(ps) ? ps : null;
                 calculatedItems.push(psItem);
             }
             
-            // 3. Price-to-Earnings (P/E)
-            if (epsBasicItem) {
+            // 3. Price-to-Earnings (P/E) - using TTM EPS
+            if (Number.isFinite(epsTTM) && epsTTM > 0) {
                 const peItem = {
-                    label: '📈 Price-to-Earnings (P/E)',
+                    label: '📈 Price-to-Earnings (P/E, TTM)',
                     concept: 'calculated_pe_ratio',
                     values: {}
                 };
-                
-                data.periods.forEach(period => {
-                    const eps = epsBasicItem.values[period];
-                    if (eps && eps > 0 && currentStockPrice) {
-                        peItem.values[period] = currentStockPrice / eps;
-                    }
-                });
+                peItem.values[mostRecentPeriod] = currentStockPrice / epsTTM;
                 calculatedItems.push(peItem);
             }
             
-            // Additional ratios from balance sheet and cash flow data
+            // 4. Price-to-Book (P/B) - using latest equity
+            if (additionalFinancialData && additionalFinancialData.metrics && additionalFinancialData.metrics.equity) {
+                const metrics = additionalFinancialData.metrics;
+                const pbItem = {
+                    label: '📚 Price-to-Book (P/B, Current)',
+                    concept: 'calculated_pb_ratio',
+                    values: {}
+                };
+                
+                const equity = metrics.equity[mostRecentPeriod];
+                if (Number.isFinite(equity) && Number.isFinite(shares) && shares > 0 && equity > 0) {
+                    const bookValuePerShare = equity / shares;
+                    const pb = currentStockPrice / bookValuePerShare;
+                    pbItem.values[mostRecentPeriod] = Number.isFinite(pb) ? pb : null;
+                }
+                calculatedItems.push(pbItem);
+            }
+            
+            // Non-price-based ratios can be calculated for all periods
             if (additionalFinancialData && additionalFinancialData.metrics) {
                 const metrics = additionalFinancialData.metrics;
-                
-                // 4. Price-to-Book (P/B)
-                if (metrics.equity) {
-                    const pbItem = {
-                        label: '📚 Price-to-Book (P/B)',
-                        concept: 'calculated_pb_ratio',
-                        values: {}
-                    };
-                    
-                    data.periods.forEach(period => {
-                        const equity = metrics.equity[period];
-                        const shares = getShares(period);
-                        if (Number.isFinite(equity) && Number.isFinite(shares) && currentStockPrice && shares > 0) {
-                            const bookValuePerShare = equity / shares;
-                            const pb = currentStockPrice / bookValuePerShare;
-                            pbItem.values[period] = Number.isFinite(pb) ? pb : null;
-                        }
-                    });
-                    calculatedItems.push(pbItem);
-                }
                 
                 // 5. Debt-to-Equity (D/E)
                 if (metrics.debt && metrics.equity) {
