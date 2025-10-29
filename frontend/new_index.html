@@ -12,9 +12,14 @@
     th, td { white-space: nowrap; }
     table { border-collapse: collapse; width: 100%; }
     th { font-weight: 600; }
+    #foundersScroll::-webkit-scrollbar { height: 8px; }
+    #foundersScroll::-webkit-scrollbar-thumb {
+      background-color: #cbd5e1; border-radius: 4px;
+    }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen flex items-center justify-center py-12 px-4">
+<body class="bg-gray-50 min-h-screen flex items-start justify-center py-12 px-4">
+  <div class="flex flex-col md:flex-row gap-8 max-w-6xl w-full justify-center items-start">
   <div class="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 space-y-6">
     <h1 class="text-2xl font-bold text-brand text-center">Valuation Tool</h1>
 
@@ -101,6 +106,47 @@
     <div id="modalBody"></div>
     </div>
 
+  <div id="foundersModule" class="bg-white rounded-xl shadow-lg w-full md:w-1/2 p-6 space-y-4">
+  <h2 class="text-2xl font-bold text-brand text-center mb-4">Founder Recommendations</h2>
+
+  <div class="flex justify-center gap-3 mt-2">
+  <button onclick="loadFounders('recommended-founders')" class="btn-primary text-white px-4 py-2 rounded-lg font-semibold">Recommended</button>
+  <button onclick="loadFounders('unseen-founders')" class="text-white px-4 py-2 rounded-lg font-semibold bg-gray-600 hover:bg-gray-700">Unseen</button>
+</div>
+<div id="foundersResults" class="hidden overflow-y-auto mt-4 max-h-[700px]">
+  <div id="foundersScroll" class="flex flex-col gap-4"></div>
+</div>
+
+  <div id="foundersLoading" class="hidden text-center py-4">
+    <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+    <p class="text-sm text-gray-600 mt-2">Loading...</p>
+  </div>
+
+  <div id="foundersTableWrapper" class="hidden overflow-x-auto">
+    <table id="foundersTable" class="min-w-full text-sm text-gray-800 border border-gray-200 rounded-lg">
+      <thead class="bg-gray-100 text-gray-700 font-semibold">
+        <tr>
+          <th class="text-left px-4 py-2">Name</th>
+          <th class="text-left px-4 py-2">Company</th>
+          <th class="text-left px-4 py-2">History</th>
+          <th class="text-left px-4 py-2">Tree Result</th>
+        </tr>
+      </thead>
+      <tbody id="foundersBody"></tbody>
+    </table>
+  </div>
+  <!-- Founder Detail Modal -->
+<div id="founderModalOverlay" class="hidden fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center" onclick="closeFounderModal()"></div>
+<div id="founderModal" class="hidden fixed inset-8 bg-white rounded-xl shadow-2xl z-50 overflow-auto p-6">
+  <div class="flex justify-between items-center mb-4">
+    <h2 id="founderModalTitle" class="text-xl font-bold text-brand">Founder Details</h2>
+    <button onclick="closeFounderModal()" class="text-2xl leading-none text-gray-700">×</button>
+  </div>
+  <div id="founderModalBody"></div>
+</div>
+
+</div>
+  
 
   <script>
     const API_URL = "";
@@ -524,6 +570,103 @@ async function fetchIndustryComparison() {
 
 
 </script>
+<script>
+const FOUNDERS_API = "https://monty-api-production.up.railway.app";
+
+async function loadFounders(endpoint) {
+  $("foundersLoading").classList.remove("hidden");
+  $("foundersResults").classList.add("hidden");
+  $("foundersScroll").innerHTML = "";
+
+  try {
+    // fetch the data first
+    const res = await fetch(`${FOUNDERS_API}/${endpoint}`, {
+      headers: {
+        "x-api-key": "5f8e7ac4f6f8a3b6b2d91c66e01d0f7d1a91f4f4bfc1f3263e57b85c14f6a733"
+      }
+    });
+    const json = await res.json();
+    let data = json.data || [];
+
+    // sort descending by access_date
+    data.sort((a, b) => new Date(b.access_date) - new Date(a.access_date));
+
+    $("foundersLoading").classList.add("hidden");
+    $("foundersResults").classList.remove("hidden");
+
+    if (!data.length) {
+      $("foundersScroll").innerHTML = `<p class="text-gray-500 px-4">No data found.</p>`;
+      return;
+    }
+
+    const scroll = $("foundersScroll");
+    for (const row of data.slice(0, 50)) {
+      const company = row.company_name || "Unknown";
+      const treePath = row.tree_path || "—";
+      const companyWebsite = row.company_website || "—";
+      const profileUrl = row.profile_url || "—";
+      const tags = (row.company_tags || "")
+        .split(",")
+        .map(t => t.trim())
+        .filter(Boolean);
+
+      const card = document.createElement("div");
+      card.className =
+        "min-w-[250px] bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer flex flex-col justify-between";
+      card.innerHTML = `
+        <div>
+          <h3 class="font-semibold text-brand text-lg truncate">${company}</h3>
+          <p class="text-xs text-gray-500 mt-1">${treePath}</p>
+        </div>
+        ${tags.length
+          ? `<div class="flex flex-wrap gap-1 mt-3">
+              ${tags.map(t => `<span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">${t}</span>`).join("")}
+            </div>`
+          : ""}
+      `;
+
+      // Add click handler to show detail modal
+      card.addEventListener("click", () => openFounderModal(row));
+      scroll.appendChild(card);
+    }
+
+  } catch (err) {
+    $("foundersLoading").classList.add("hidden");
+    console.error(err);
+    $("foundersScroll").innerHTML = `<p class="text-red-500 px-4">Error loading data.</p>`;
+  }
+}
+function openFounderModal(data) {
+  $("founderModalTitle").textContent = data.company_name || "Founder Details";
+  const body = $("founderModalBody");
+
+  body.innerHTML = `
+    <div class="space-y-3">
+      <p><strong>Founder:</strong> ${data.name || "—"}</p>
+      <p><strong>Company:</strong> ${data.company_name || "—"}</p>
+      <p><strong>Description:</strong> ${data.product || "—"}</p>
+      <p><strong>Location:</strong> ${data.location || "—"}</p>
+      <p><strong>Access Date:</strong> ${data.access_date || "—"}</p>
+      ${data.profile_url
+        ? `<p><strong>LinkedIn Profile:</strong> <a href="${data.profile_url}" target="_blank" class="text-blue-600 underline">View Profile</a></p>`
+        : ""}
+      ${data.company_website
+        ? `<p><strong>Company Website:</strong> <a href="${data.company_website}" target="_blank" class="text-blue-600 underline">View Website</a></p>`
+        : ""}
+    </div>
+  `;
+
+  $("founderModalOverlay").classList.remove("hidden");
+  $("founderModal").classList.remove("hidden");
+}
+
+function closeFounderModal() {
+  $("founderModalOverlay").classList.add("hidden");
+  $("founderModal").classList.add("hidden");
+}
+
+</script>
+
 
 </body>
 </html>
