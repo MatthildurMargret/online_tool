@@ -39,7 +39,11 @@ def store_company_financials(
     period_end_date: str,
     filing_type: str,
     raw_data: Optional[str] = None,
-    valuation_metrics: Optional[Dict] = None
+    valuation_metrics: Optional[Dict] = None,
+    income: Optional[float] = None,
+    latest_eps: Optional[float] = None,
+    revenue_label: Optional[str] = None,
+    income_label: Optional[str] = None
 ) -> bool:
     """
     Store company financial data in Supabase
@@ -58,7 +62,11 @@ def store_company_financials(
             "period_end_date": period_end_date,
             "filing_type": filing_type,
             "last_updated": datetime.now().isoformat(),
-            "raw_data": raw_data
+            "raw_data": raw_data,
+            "income": income,
+            "latest_eps": latest_eps,
+            "revenue_label": revenue_label,
+            "income_label": income_label
         }
         
         # Add valuation_metrics if provided
@@ -77,20 +85,38 @@ def store_company_financials(
 def get_company_financials(ticker: str) -> Optional[Dict]:
     """
     Retrieve company financial data from Supabase
-    Returns dict with financial data or None if not found
+    Returns normalized dict with financial data or None if not found
     """
     if not supabase:
         raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
     
     try:
-        result = supabase.table("company_financials").select("*").eq("ticker", ticker.upper()).execute()
+        result = supabase.table("company_financials").select(
+            "ticker, company_name, revenue, income, shares_outstanding, latest_eps, filing_date, period_end_date, filing_type, last_updated, raw_data"
+        ).eq("ticker", ticker.upper()).execute()
         
-        if result.data and len(result.data) > 0:
-            return result.data[0]
-        return None
+        if not result.data:
+            return None
+        
+        row = result.data[0]
+        # ✅ Normalize key names for consistency with SQLite fallback
+        return {
+            "ticker": row.get("ticker"),
+            "company_name": row.get("company_name"),
+            "revenue": row.get("revenue"),
+            "income": row.get("income"),
+            "shares_outstanding": row.get("shares_outstanding"),
+            "latest_eps": row.get("latest_eps"),
+            "filing_date": row.get("filing_date"),
+            "period_end": row.get("period_end_date"),
+            "filing_type": row.get("filing_type"),
+            "last_updated": row.get("last_updated"),
+            "raw_data": row.get("raw_data"),
+        }
     except Exception as e:
         print(f"Error retrieving financial data for {ticker}: {e}")
         return None
+
 
 
 def get_all_tickers_with_financials() -> List[str]:
