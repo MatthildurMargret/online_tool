@@ -8,6 +8,7 @@ Includes comprehensive validation and data quality checks
 import csv
 import sys
 import time
+import re
 import json
 from pathlib import Path
 from datetime import datetime
@@ -27,8 +28,8 @@ from supabase_db import (
     get_all_tickers_with_financials,
     is_supabase_configured
 )
-from revenue_extractor import extract_revenue
-from scale_normalizer import normalize_financial_data, validate_normalization
+from scale_normalizer import normalize_financial_data
+
 
 # Load environment variables
 load_dotenv(Path(__file__).parent.parent / "backend" / ".env")
@@ -40,14 +41,12 @@ set_identity("matthildur@montageventures.com")
 REVENUE_CONCEPTS = [
     'us-gaap_Revenues',
     'us-gaap_SalesRevenueNet',
-    'us-gaap_SalesRevenueGoodsNet',
-    'us-gaap_RevenueFromContractWithCustomerExcludingAssessedTax',
     'us-gaap_TotalRevenues',
     'us-gaap_OperatingRevenue',
     'us-gaap_Revenue',
-    'RevenueFromContractWithCustomer',
+    'us-gaap_NetSales',
     'Revenues',
-    'Revenue',
+    'Revenue'
 ]
 
 # Expanded list of share concepts to check (in priority order)
@@ -192,596 +191,433 @@ def validate_financial_data(ticker: str, data: Dict, dq: DataQuality) -> bool:
         except Exception as e:
             dq.add_info(f"Could not validate with current price: {str(e)}")
     
-    # Check balance sheet metrics
+    # Check statement availability (raw_data contains DataFrames)
     raw_data = data.get('raw_data', {})
-    metrics = raw_data.get('metrics', {})
     
-    if not metrics.get('equity'):
-        dq.add_warning("Equity not found in balance sheet")
-    else:
-        dq.add_info(f"Equity found for {len(metrics['equity'])} periods")
+    income_df = raw_data.get('income_statement')
+    balance_df = raw_data.get('balance_sheet')
+    cashflow_df = raw_data.get('cash_flow')
     
-    if not metrics.get('debt'):
-        dq.add_warning("Debt not found in balance sheet")
-    else:
-        dq.add_info(f"Debt found for {len(metrics['debt'])} periods")
-    
-    if not metrics.get('operating_cash_flow'):
-        dq.add_warning("Operating cash flow not found")
-    else:
-        dq.add_info(f"OCF found for {len(metrics['operating_cash_flow'])} periods")
-    
-    # Check net income
-    if not metrics.get('net_income'):
-        dq.add_warning("Net income not found in income statement")
-    else:
-        dq.add_info(f"Net income found for {len(metrics['net_income'])} periods")
-    
-    # Check EPS
-    if not metrics.get('eps_basic') and not metrics.get('eps_diluted'):
-        dq.add_warning("EPS (basic/diluted) not found")
-    else:
-        if metrics.get('eps_basic'):
-            dq.add_info(f"EPS Basic found for {len(metrics['eps_basic'])} periods")
-        if metrics.get('eps_diluted'):
-            dq.add_info(f"EPS Diluted found for {len(metrics['eps_diluted'])} periods")
-    
-    # Check statement availability
-    if not raw_data.get('income_statement', {}).get('items'):
+    if income_df is None or (hasattr(income_df, 'empty') and income_df.empty):
         dq.add_issue("Income statement is empty")
-    
-    if not raw_data.get('balance_sheet', {}).get('items'):
-        dq.add_warning("Balance sheet is empty or missing")
-    
-    if not raw_data.get('cash_flow', {}).get('items'):
-        dq.add_warning("Cash flow statement is empty or missing")
-    
-    # Check period count
-    periods = raw_data.get('income_statement', {}).get('periods', [])
-    if len(periods) < 2:
-        dq.add_warning(f"Only {len(periods)} period(s) available - may limit analysis")
     else:
-        dq.add_info(f"{len(periods)} periods available")
+        dq.add_info("Income statement available")
+    
+    if balance_df is None or (hasattr(balance_df, 'empty') and balance_df.empty):
+        dq.add_warning("Balance sheet is empty or missing")
+    else:
+        dq.add_info("Balance sheet available")
+    
+    if cashflow_df is None or (hasattr(cashflow_df, 'empty') and cashflow_df.empty):
+        dq.add_warning("Cash flow statement is empty or missing")
+    else:
+        dq.add_info("Cash flow statement available")
     
     # Return False only if critical issues (revenue or shares missing)
     return not dq.has_critical_issues()
 
 
 def get_financial_data(ticker):
-    """Fetch latest 10-K + last 4 10-Q filings for TTM calculations"""
+    """Fetch latest 10-K + last 4 10-Q filings for TTM calculations (using label-based detection)."""
+
     try:
         c = Company(ticker)
-        
-        # Fetch latest annual (10-K) and last 4 quarterly (10-Q) filings
+
+        # --- Fetch filings ---
         annual_filing = c.get_filings(form="10-K").latest(1)
-        quarterly_filing_list = c.get_filings(form="10-Q").latest(4)
-        
-        if not annual_filing:
+        quarterly_filings = c.get_filings(form="10-Q").latest(4)
+
+        if not annual_filing and not quarterly_filings:
+            print(f"No filings found for {ticker}")
             return None
-        
-        # Combine filings - annual first, then quarters (most recent first)
-        all_filings = []
-        filing_metadata = []
-        
-        # Add annual filing (latest returns a single filing, not a list)
-        all_filings.append(annual_filing)
-        filing_metadata.append({
-            'type': '10-K',
-            'filing_date': str(annual_filing.filing_date) if hasattr(annual_filing, 'filing_date') else None,
-            'period_end': None  # Will be extracted from XBRL
-        })
-        
-        # Add quarterly filings (latest(4) returns a Filings object that is iterable)
-        if quarterly_filing_list:
-            for filing in quarterly_filing_list:
+
+        # --- Combine filings & metadata ---
+        all_filings, filing_metadata = [], []
+        for ftype, filing in [("10-K", annual_filing)] + [("10-Q", f) for f in (quarterly_filings or [])]:
+            if filing:
                 all_filings.append(filing)
                 filing_metadata.append({
-                    'type': '10-Q',
-                    'filing_date': str(filing.filing_date) if hasattr(filing, 'filing_date') else None,
-                    'period_end': None
+                    "type": ftype,
+                    "filing_date": str(getattr(filing, "filing_date", None)),
+                    "period_end": str(getattr(filing, "period_of_report", None)),
                 })
-        
-        if not all_filings:
-            return None
-        
-        # Get XBRL data from all filings
+
+        # --- Parse XBRL ---
         xbs = XBRLS.from_filings(all_filings)
-        income_statement = xbs.statements.income_statement()
-        income_df = income_statement.to_dataframe()
+        income_df = xbs.statements.income_statement().to_dataframe()
+        balance_df = getattr(xbs.statements, "balance_sheet", lambda: None)()
+        cashflow_df = getattr(xbs.statements, "cash_flow_statement", lambda: None)()
+        balance_df = balance_df.to_dataframe() if balance_df else None
+        cashflow_df = cashflow_df.to_dataframe() if cashflow_df else None
 
-        # Try to also get balance sheet and cash flow
-        try:
-            balance_sheet = xbs.statements.balance_sheet()
-            balance_df = balance_sheet.to_dataframe()
-        except Exception:
-            balance_sheet = None
-            balance_df = None
-        try:
-            cash_flow = xbs.statements.cash_flow_statement()
-            cashflow_df = cash_flow.to_dataframe()
-        except Exception:
-            cash_flow = None
-            cashflow_df = None
+        # --- Determine most recent filing ---
+        most_recent = sorted(filing_metadata, key=lambda x: x["filing_date"], reverse=True)[0]
+        latest_type, period_end, filing_date = most_recent["type"], most_recent["period_end"], most_recent["filing_date"]
 
-        # Extract key metrics using TTM revenue calculation
-        revenue = None
-        shares = None
-        
-        periods = list(income_statement.periods)
-        latest_period = sorted(periods, key=lambda x: x, reverse=True)[0] if periods else None
-        
-        if latest_period:
-            # Convert income_df to items format for revenue_extractor
-            items = []
-            for _, row in income_df.iterrows():
-                item = {
-                    "label": row.get("label", ""),
-                    "concept": row.get("concept", ""),
-                    "values": {}
-                }
-                for period in periods:
-                    if period in row:
-                        val = row[period]
-                        item["values"][str(period)] = float(val) if val is not None and val != '' else None
-                items.append(item)
-            
-            # Calculate TTM revenue using the period_metadata that will be created later
-            # For now, we need to identify quarterly vs annual periods
-            quarterly_periods = []
-            annual_periods = []
-            
-            # Map periods to filing types
-            for idx, filing in enumerate(all_filings):
-                filing_period_end = filing.period_of_report.isoformat() if hasattr(filing.period_of_report, 'isoformat') else str(filing.period_of_report)
-                filing_type = filing_metadata[idx]['type']
-                if filing_period_end in [str(p) for p in periods]:
-                    if filing_type == '10-Q':
-                        quarterly_periods.append(str(filing_period_end))
-                    elif filing_type == '10-K':
-                        annual_periods.append(str(filing_period_end))
-            
-            # Sort periods newest first
-            quarterly_periods = sorted(quarterly_periods, reverse=True)
-            annual_periods = sorted(annual_periods, reverse=True)
-            
-            # Try to sum last 4 quarters for TTM
-            revenue_method = None
-            if len(quarterly_periods) >= 4:
-                last_4_quarters = quarterly_periods[:4]
-                revenue_values = []
-                
-                for period in last_4_quarters:
-                    # Get cost of revenue for this period
-                    cor = None
-                    for _, row in income_df.iterrows():
-                        if row.get('concept') == 'us-gaap_CostOfRevenue':
-                            value = row.get(period)
-                            if value:
-                                cor = abs(float(value))
-                                break
-                    
-                    rev, _ = extract_revenue(items, [period], prefer_period=period, cost_of_revenue=cor)
-                    if rev is not None:
-                        revenue_values.append(rev)
-                
-                if len(revenue_values) == 4:
-                    revenue = sum(revenue_values)
-                    revenue_method = 'ttm_4q'
-            
-            # Fallback: use most recent annual
-            if revenue is None and annual_periods:
-                cor = None
-                for _, row in income_df.iterrows():
-                    if row.get('concept') == 'us-gaap_CostOfRevenue':
-                        value = row.get(annual_periods[0])
-                        if value:
-                            cor = abs(float(value))
-                            break
-                
-                revenue, _ = extract_revenue(items, annual_periods, prefer_period=annual_periods[0], cost_of_revenue=cor)
-                if revenue is not None:
-                    revenue_method = 'annual'
-            
-            # Last resort: use most recent period
-            if revenue is None:
-                cor = None
-                for _, row in income_df.iterrows():
-                    if row.get('concept') == 'us-gaap_CostOfRevenue':
-                        value = row.get(latest_period)
-                        if value:
-                            cor = abs(float(value))
-                            break
-                
-                revenue, _ = extract_revenue(items, [str(p) for p in periods], prefer_period=str(latest_period), cost_of_revenue=cor)
-                if revenue is not None:
-                    revenue_method = 'single_period'
-            
-            # Final fallback: Use fuzzy matching on labels if standard extraction failed
-            if revenue is None:
-                print(f"  ⚠️  Standard revenue extraction failed, trying fuzzy matching...")
-                revenue_row = find_revenue_row(income_df)
-                if revenue_row is not None and latest_period in revenue_row:
-                    value = revenue_row.get(latest_period)
-                    if value:
-                        revenue = abs(float(value))
-                        revenue_method = 'fuzzy_match'
-                        print(f"  ✓ Found revenue via fuzzy match: {revenue_row.get('label', 'Unknown')}")
-            
-            # Log the revenue calculation method
-            if revenue and revenue_method:
-                print(f"  Revenue (TTM): ${revenue:,.0f} via {revenue_method}")
-            elif revenue is None:
-                print(f"  ⚠️  Could not extract revenue for {ticker}")
-            
-            # Shares: Use expanded priority list
-            for concept in SHARE_CONCEPTS:
-                for _, row in income_df.iterrows():
-                    if row.get('concept', '') == concept:
-                        if latest_period in row and row[latest_period]:
-                            shares = float(row[latest_period])
-                            break
-                if shares is not None:
-                    break
-        
-        # If shares not found in income statement, try balance sheet with priority order
-        if not shares and balance_df is not None:
-            periods = list(balance_sheet.periods) if balance_sheet else []
-            if periods:
-                latest_period = sorted(periods, key=lambda x: x, reverse=True)[0]
-                
-                # Try direct shares outstanding concepts first
-                for concept in SHARE_CONCEPTS:
-                    for _, row in balance_df.iterrows():
-                        if row.get('concept', '') == concept:
-                            if latest_period in row and row[latest_period]:
-                                shares = float(row[latest_period])
-                                break
-                    if shares is not None:
-                        break
-                
-                # If still not found, try multiple calculation methods
-                if not shares:
-                    shares_issued = None
-                    treasury_shares = None
-                    common_stock_value = None
-                    par_value = None
-                    
-                    for _, row in balance_df.iterrows():
-                        concept = row.get('concept', '')
-                        value = float(row[latest_period]) if latest_period in row and row[latest_period] else None
-                        
-                        # Method 2: Issued - Treasury
-                        if concept == 'us-gaap_CommonStockSharesIssued':
-                            shares_issued = value
-                        if concept in ['us-gaap_TreasuryStockCommonShares', 'us-gaap_TreasuryStockShares']:
-                            treasury_shares = value
-                        
-                        # Method 1: Common Stock Value / Par Value
-                        if concept == 'us-gaap_CommonStockValue':
-                            common_stock_value = value
-                        if concept == 'us-gaap_CommonStockParOrStatedValuePerShare':
-                            par_value = value
-                    
-                    # Try Method 2: Calculate shares outstanding = issued - treasury
-                    if shares_issued is not None and shares is None:
-                        shares = shares_issued - (treasury_shares if treasury_shares else 0)
-                    
-                    # Try Method 1: Calculate from par value
-                    if shares is None and common_stock_value and par_value and par_value > 0:
-                        shares = common_stock_value / par_value
+        # --- Normalize periods (after we have period_end) ---
+        def normalize_date(d):
+            if isinstance(d, str) and re.match(r"\d{4}-\d{2}(-\d{2})?$", d):
+                return d[:7]  # keep YYYY-MM
+            return d
 
-        # Prefer point-in-time balance sheet CommonStockSharesOutstanding when available
-        # even if we already obtained weighted-average shares from income statement.
-        if balance_df is not None and balance_sheet is not None:
-            try:
-                bs_periods = list(balance_sheet.periods)
-                if bs_periods:
-                    bs_latest = sorted(bs_periods, key=lambda x: x, reverse=True)[0]
-                    for _, row in balance_df.iterrows():
-                        if row.get('concept', '') == 'us-gaap_CommonStockSharesOutstanding':
-                            if bs_latest in row and row[bs_latest]:
-                                shares = float(row[bs_latest])
-                                break
-            except Exception:
-                pass
-        
-        # Method 3: If still no shares, try to derive from Net Income / EPS
-        if not shares and income_df is not None and latest_period:
-            net_income = None
-            eps_value = None
-            
-            # Get net income
-            for _, row in income_df.iterrows():
-                concept = row.get('concept', '')
-                value = float(row[latest_period]) if latest_period in row and row[latest_period] else None
-                
-                if concept == 'us-gaap_NetIncomeLoss':
-                    net_income = value
-                    break
-            
-            # Try expanded EPS concepts in priority order
-            for eps_concept in EPS_CONCEPTS:
-                for _, row in income_df.iterrows():
-                    if row.get('concept', '') == eps_concept:
-                        value = float(row[latest_period]) if latest_period in row and row[latest_period] else None
-                        if value is not None:
-                            eps_value = value
-                            break
-                if eps_value is not None:
-                    break
-            
-            # Calculate shares = Net Income / EPS
-            if net_income and eps_value and eps_value != 0:
-                shares = abs(net_income / eps_value)  # abs() in case of net loss
-                print(f"  Shares derived from Net Income / EPS: {shares:,.0f}")
-        
-        # Method 4: If still no shares, use Company.shares_outstanding from Edgar facts
-        if not shares:
-            try:
-                company_shares = c.shares_outstanding
-                if company_shares and company_shares > 0:
-                    shares = float(company_shares)
-            except Exception:
-                pass  # If shares_outstanding not available, continue without it
-        
-        # Scale detection: Handle shares reported in thousands
-        # Some filings report shares in thousands but don't indicate this clearly
-        if shares and revenue and alpaca_client:
-            try:
-                # Get current stock price for validation
-                request_params = StockLatestTradeRequest(symbol_or_symbols=ticker)
-                trades = alpaca_client.get_stock_latest_trade(request_params)
-                if ticker in trades:
-                    price = float(trades[ticker].price)
-                    market_cap = price * shares
-                    
-                    # If market cap is suspiciously low (< $1M for companies with significant revenue)
-                    # and revenue is substantial (> $100M), shares are likely in thousands
-                    if market_cap < 1e6 and revenue > 1e8:
-                        print(f"  ⚠️  Scale issue detected: Market cap ${market_cap:,.0f} too low for revenue ${revenue:,.0f}")
-                        print(f"  Adjusting shares from {shares:,.0f} to {shares * 1000:,.0f} (×1000)")
-                        shares *= 1000
-            except Exception as e:
-                # Don't fail the import if price fetch fails
-                pass
-
-        # Get filing metadata from the most recent filing (first in list)
-        most_recent_filing = all_filings[0]
-        filing_date = most_recent_filing.filing_date.isoformat() if hasattr(most_recent_filing.filing_date, 'isoformat') else str(most_recent_filing.filing_date)
-        period_end = most_recent_filing.period_of_report.isoformat() if hasattr(most_recent_filing.period_of_report, 'isoformat') else str(most_recent_filing.period_of_report)
-        
-        # Map periods to filing types by matching period_of_report dates
-        period_to_filing_type = {}
-        for idx, filing in enumerate(all_filings):
-            filing_period_end = filing.period_of_report.isoformat() if hasattr(filing.period_of_report, 'isoformat') else str(filing.period_of_report)
-            period_to_filing_type[filing_period_end] = filing_metadata[idx]['type']
-        
-        # Helper to convert a statement dataframe to serializable list of items
-        def df_to_items(df, periods):
-            items = []
-            if df is None:
-                return items
-            for _, row in df.iterrows():
-                item = {
-                    "label": row.get("label", ""),
-                    "concept": row.get("concept", ""),
-                    "values": {}
-                }
-                for period in periods:
-                    if period in row:
-                        val = row[period]
-                        item["values"][str(period)] = float(val) if val is not None and val != '' else None
-                items.append(item)
-            return items
-
-        # Build period_metadata to track which periods are 10-K vs 10-Q
-        # Sort periods: oldest to newest (left to right), with 10-K prioritized on the right
-        periods_with_types = []
-        for period in income_statement.periods:
-            period_str = str(period)
-            filing_type = period_to_filing_type.get(period_str, 'unknown')
-            periods_with_types.append({
-                'date': period_str,
-                'type': filing_type
-            })
-        
-        # Sort by date (oldest first), then by type (10-Q before 10-K)
-        # This ensures that if we have both 10-Q and 10-K for the same period,
-        # the 10-K appears to the right
-        periods_with_types.sort(key=lambda x: (x['date'], x['type'] == '10-K'))
-        
-        # Extract sorted periods and metadata
-        sorted_periods = [p['date'] for p in periods_with_types]
-        period_metadata = periods_with_types
-        
-        # Build raw_data with all statements using sorted periods
-        raw_data = {
-            "income_statement": {
-                "periods": sorted_periods,
-                "items": df_to_items(income_df, sorted_periods)
-            },
-            "balance_sheet": {
-                "periods": sorted_periods if balance_sheet else [],
-                "items": df_to_items(balance_df, sorted_periods) if balance_sheet else []
-            },
-            "cash_flow": {
-                "periods": sorted_periods if cash_flow else [],
-                "items": df_to_items(cashflow_df, sorted_periods) if cash_flow else []
-            },
-            "period_metadata": period_metadata,
-            "metrics": {
-                # will be filled below
-            }
+        income_df.columns = [normalize_date(c) for c in income_df.columns]
+        period_end = normalize_date(period_end)
+        period_types = {
+            normalize_date(meta["period_end"]): meta["type"]
+            for meta in filing_metadata if meta.get("period_end")
         }
 
-        # Derive per-period metrics from balance sheet and cash flow (if available)
-        def first_row_exact(df, concepts):
-            if df is None:
+        # --- Helper: match label keywords robustly ---
+        def get_value_from_label(df, label_keywords=None, exclude_keywords=None, period=None, ttm=False):
+            """Improved label-based extractor (safe, loss-aware, period-agnostic, no concept dependency)."""
+
+            import math
+            import pandas as pd
+
+            if df is None or df.empty:
+                return None, None
+
+            label_keywords = [k.lower() for k in (label_keywords or ["revenue", "sales", "contract"])]
+            exclude_keywords = [k.lower() for k in (exclude_keywords or ["cost", "gross", "total cost", "per share"])]
+
+            # --- Step 1: find matching rows ---
+            def match_label(label):
+                if not isinstance(label, str):
+                    return False
+                text = label.lower()
+                return any(k in text for k in label_keywords) and not any(ex in text for ex in exclude_keywords)
+
+            matches = df[df["label"].apply(match_label)]
+            if matches.empty:
+                return None, None
+
+            # --- Step 2: pick the best-scoring row ---
+            def score_label(lbl):
+                l = lbl.lower()
+                score = 0
+
+                # strong positives
+                if l.strip() in ("net income", "net income (loss)"):
+                    score += 20
+                if "net income (loss)" in l or "(loss)" in l and "net income" in l:
+                    score += 12
+                if "net income" in l:
+                    score += 10
+                if "profit or loss" in l:
+                    score += 8
+                if "profit" in l and "gross" not in l:
+                    score += 6
+                if "total revenue" in l or l.strip() == "revenue":
+                    score += 8
+                if "contract revenue" in l:
+                    score += 6
+
+                # mild positives
+                if "continuing operations" in l:
+                    score += 2
+                if "from continuing operations" in l:
+                    score += 1
+                if "attributable to" in l and "parent" in l:
+                    score += 4
+
+                # penalties
+                if "operating" in l:
+                    score -= 5
+                if "subsidiaries" in l:
+                    score -= 5
+                if "comprehensive" in l:
+                    score -= 5
+                if "before tax" in l:
+                    score -= 3
+                if "noncontrolling" in l:
+                    score -= 2
+                if "attributable to" in l and "parent" not in l:
+                    score -= 2
+                if "diluted" in l:
+                    score += 2
+                if "basic" in l:
+                    score -= 1
+
+                return score
+
+            matches = matches.copy()
+            matches["score"] = matches["label"].apply(score_label)
+            matches = matches.sort_values("score", ascending=False)
+
+            # --- Step 2.5: skip rows that are all NaN ---
+            def row_has_numeric_data(row):
+                for c in df.columns:
+                    if c in ("label", "concept"):
+                        continue
+                    val = row.get(c)
+                    if isinstance(val, (int, float)) and not math.isnan(val):
+                        return True
+                return False
+
+            # pick first row with usable data
+            row = None
+            for _, candidate in matches.iterrows():
+                if row_has_numeric_data(candidate):
+                    row = candidate
+                    break
+            if row is None:
+                row = matches.iloc[0]
+
+            label = row["label"]
+
+            # --- Step 3: safe period lookup ---
+            def get_period_value(row, period):
+                if period in row.index:
+                    return row.get(period)
+                # fuzzy match (same year-month)
+                for col in row.index:
+                    if isinstance(col, str) and period and col[:7] == period[:7]:
+                        return row.get(col)
+                # fallback to latest numeric column
+                numeric_cols = [
+                    c for c in row.index
+                    if c not in ("label", "concept")
+                    and isinstance(row.get(c), (int, float))
+                    and not math.isnan(row.get(c))
+                ]
+                if numeric_cols:
+                    return row.get(numeric_cols[0])
                 return None
-            concepts_set = set(concepts)
-            for _, r in df.iterrows():
-                c = str(r.get('concept', ''))
-                if c in concepts_set:
-                    return r
-            return None
 
-        # Equity - with more variants
-        equity_row = first_row_exact(balance_df, [
-            'us-gaap_StockholdersEquity',
-            'us-gaap_StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
-            'us-gaap_PartnersCapital'
-        ])
-        
-        # If equity not found directly, try to calculate from total assets - liabilities
-        if equity_row is None and balance_df is not None:
-            total_assets_row = first_row_exact(balance_df, [
-                'us-gaap_Assets',
-                'us-gaap_AssetsIncludingDiscontinuedOperations'
-            ])
-            total_liabilities_row = first_row_exact(balance_df, [
-                'us-gaap_Liabilities',
-                'us-gaap_LiabilitiesIncludingDiscontinuedOperations'
-            ])
-            if total_assets_row is not None and total_liabilities_row is not None and balance_sheet is not None:
-                # Calculate equity = assets - liabilities for each period
-                equity_row = {}
-                for p in sorted_periods:
-                    if p in total_assets_row and p in total_liabilities_row:
-                        assets_val = total_assets_row[p]
-                        liab_val = total_liabilities_row[p]
-                        if assets_val not in (None, '') and liab_val not in (None, ''):
-                            equity_row[p] = float(assets_val) - float(liab_val)
-                if not equity_row:
-                    equity_row = None
-        if equity_row is not None and balance_sheet is not None:
-            eq = {}
-            for p in sorted_periods:
-                if p in equity_row:
-                    v = equity_row[p]
-                    eq[str(p)] = float(v) if v not in (None, '') else None
-            raw_data["metrics"]["equity"] = eq
+            # --- Step 4: extract the number ---
+            if not ttm:
+                v = get_period_value(row, period)
+                if isinstance(v, str):
+                    try:
+                        v = float(v.replace(",", ""))
+                    except:
+                        v = None
+                return (float(v) if isinstance(v, (int, float)) and not math.isnan(v) else None), label
 
-        # Debt = current + noncurrent (expanded concepts)
-        debt_cur_row = first_row_exact(balance_df, [
-            'us-gaap_DebtCurrent',
-            'us-gaap_ShortTermBorrowings',
-            'us-gaap_NotesPayableShortTerm',
-            'us-gaap_CommercialPaper'
-        ])
-        debt_nc_row = first_row_exact(balance_df, [
-            'us-gaap_LongTermDebtNoncurrent',
-            'us-gaap_LongTermDebtAndCapitalLeaseObligations',
-            'us-gaap_LongTermDebt',
-            'us-gaap_LongTermDebtAndCapitalLeaseObligationsNoncurrent'
-        ])
-        if balance_sheet is not None and (debt_cur_row is not None or debt_nc_row is not None):
-            debt = {}
-            for p in sorted_periods:
-                total = 0.0
-                has_val = False
-                if debt_cur_row is not None and p in debt_cur_row and debt_cur_row[p] not in (None, ''):
-                    total += float(debt_cur_row[p]); has_val = True
-                if debt_nc_row is not None and p in debt_nc_row and debt_nc_row[p] not in (None, ''):
-                    total += float(debt_nc_row[p]); has_val = True
-                debt[str(p)] = total if has_val else None
-            raw_data["metrics"]["debt"] = debt
+            # --- Step 5: TTM aggregation (sum last 4 true quarterly values only; skip annual 10-K) ---
+            vals = []
 
-        # Operating cash flow
-        ocf_row = first_row_exact(cashflow_df, [
-            'us-gaap_NetCashProvidedByUsedInOperatingActivities',
-            'us-gaap_NetCashProvidedByUsedInOperatingActivitiesContinuingOperations',
-            'us-gaap_NetCashProvidedByUsedInOperatingActivitiesIncludingDiscontinuedOperations'
-        ])
-        # If cash flow statement missing, try to find OCF concept in any dataframe we have
-        if ocf_row is None and income_df is not None:
-            ocf_row = first_row_exact(income_df, [
-                'us-gaap_NetCashProvidedByUsedInOperatingActivities',
-                'us-gaap_NetCashProvidedByUsedInOperatingActivitiesContinuingOperations',
-                'us-gaap_NetCashProvidedByUsedInOperatingActivitiesIncludingDiscontinuedOperations'
-            ])
-        # If still not found, attempt company extension fallback by local name pattern on cash flow df
-        if ocf_row is None and cashflow_df is not None:
+            def is_quarterly_period(p: str) -> bool:
+                """Return True only if the given period corresponds to a quarterly (10-Q) report."""
+                if not isinstance(p, str):
+                    return False
+
+                # Use known filing metadata if available
+                ftype = period_types.get(p)
+                if ftype:
+                    if "10-Q" in ftype:
+                        return True
+                    if "10-K" in ftype:
+                        return False
+
+                # Fuzzy match by month to known filing periods
+                for meta_date, meta_type in period_types.items():
+                    if meta_date and meta_date[:7] == p[:7]:
+                        return "10-Q" in meta_type  # only treat as quarterly if a matching 10-Q exists
+
+                # Fallback heuristic for filers with normalized YYYY-MM only
+                # Allow all quarter ends (03, 06, 09, 12)
+                # but treat "12" as quarterly *only* if we don't already have a 10-K for that month
+                month = p[-2:]
+                if month in ("03", "06", "09"):
+                    return True
+                if month == "12":
+                    # Check if this December period also has a 10-K entry — if so, skip it
+                    has_annual = any(
+                        ("10-K" in meta_type and meta_date.endswith("-12"))
+                        for meta_date, meta_type in period_types.items()
+                    )
+                    return not has_annual
+                return False
+
+
+            # Collect quarterly columns only
+            period_cols = [
+                p for p in df.columns
+                if p not in ("label", "concept") and is_quarterly_period(str(p))
+            ]
+
+            # If no clear quarterlies found, fall back to date-like columns
+            if not period_cols:
+                period_cols = [
+                    p for p in df.columns
+                    if p not in ("label", "concept") and re.match(r"\d{4}-\d{2}$", str(p))
+                ]
+
+            # Sort most recent first
             try:
-                for _, r in cashflow_df.iterrows():
-                    c = str(r.get('concept', ''))
-                    # local name after first underscore if namespace present
-                    local = c.split('_', 1)[1] if '_' in c else c
-                    local_lower = local.lower()
-                    if (
-                        'netcash' in local_lower and
-                        'operating' in local_lower and
-                        ('provided' in local_lower or 'used' in local_lower)
-                    ):
-                        ocf_row = r
-                        break
+                period_cols = sorted(period_cols, reverse=True)
             except Exception:
                 pass
-        if ocf_row is not None and (cash_flow is not None or income_statement is not None):
-            ocf = {}
-            for p in sorted_periods:
-                if p in ocf_row:
-                    v = ocf_row[p]
-                    ocf[str(p)] = float(v) if v not in (None, '') else None
-            raw_data["metrics"]["operating_cash_flow"] = ocf
-        
-        # Net Income extraction (GAAP-standard with priority order)
-        net_income_row = first_row_exact(income_df, [
-            'us-gaap_NetIncomeLoss',
-            'us-gaap_ProfitLoss',  # fallback concept used by some filers
-            'us-gaap_NetIncomeLossAvailableToCommonStockholdersBasic'  # more specific variant
-        ])
-        if net_income_row is not None and income_statement is not None:
-            ni = {}
-            for p in sorted_periods:
-                if p in net_income_row and net_income_row[p] not in (None, ''):
-                    ni[str(p)] = float(net_income_row[p])
-            if ni:  # Only add if we found values
-                raw_data["metrics"]["net_income"] = ni
-        
-        # EPS extraction (Basic and Diluted)
-        eps_basic_row = first_row_exact(income_df, ['us-gaap_EarningsPerShareBasic'])
-        eps_diluted_row = first_row_exact(income_df, ['us-gaap_EarningsPerShareDiluted'])
-        
-        if eps_basic_row is not None and income_statement is not None:
-            eps_b = {}
-            for p in sorted_periods:
-                if p in eps_basic_row and eps_basic_row[p] not in (None, ''):
-                    eps_b[str(p)] = float(eps_basic_row[p])
-            if eps_b:  # Only add if we found values
-                raw_data["metrics"]["eps_basic"] = eps_b
-        
-        if eps_diluted_row is not None and income_statement is not None:
-            eps_d = {}
-            for p in sorted_periods:
-                if p in eps_diluted_row and eps_diluted_row[p] not in (None, ''):
-                    eps_d[str(p)] = float(eps_diluted_row[p])
-            if eps_d:  # Only add if we found values
-                raw_data["metrics"]["eps_diluted"] = eps_d
-        
+
+            # Sum up to 4 quarterly values (most recent first)
+            for p in period_cols:
+                val = row.get(p)
+                if val in (None, "", 0) or (isinstance(val, float) and math.isnan(val)):
+                    continue
+                if isinstance(val, str):
+                    try:
+                        val = float(val.replace(",", ""))
+                    except Exception:
+                        continue
+                vals.append(float(val))
+                if len(vals) >= 4:
+                    break
+
+            # Fallback: use most recent annual (10-K) if no quarterly data found
+            if not vals:
+                for p in reversed(period_cols):
+                    ftype = period_types.get(p, "")
+                    if "10-K" in ftype:
+                        val = row.get(p)
+                        if isinstance(val, (int, float)) and not math.isnan(val):
+                            vals = [float(val)]
+                            break
+
+            return (sum(vals) if vals else None), label
+
+
+        # --- Core metric extractor (for both 10-K and 10-Q) ---
+        def extract_financial_metrics(ttm=False):
+            revenue, revenue_label = get_value_from_label(
+                income_df,
+                label_keywords=["revenue", "sales", "contract", "revenues"],
+                exclude_keywords=["cost", "gross", "total cost", "per share"],
+                ttm=ttm
+            )
+
+            # --- Net Income ---
+            income, income_label = get_value_from_label(
+                income_df,
+                label_keywords=["net income", "income", "profit"],
+                exclude_keywords=["attributable to", "per share", "before tax", "comprehensive"],
+                ttm=ttm
+            )
+            eps, eps_label = get_value_from_label(
+                income_df,
+                label_keywords=["earnings per share", "eps", "in usd per share", "in dollars per share", "basic", "diluted"],
+                exclude_keywords=["continuing operations", "discontinued operations", "available to common shareholders", "net income"],
+                period=period_end,
+                ttm=False
+            )
+            if not eps:
+                eps, eps_label = get_value_from_label(
+                    income_df,
+                    label_keywords=["earnings per share", "eps"],
+                    exclude_keywords=[],
+                    period=period_end,
+                    ttm=False
+                )
+            shares, shares_label = get_value_from_label(
+                income_df,
+                label_keywords=[
+                    "weighted average",
+                    "shares outstanding",
+                    "number of shares",
+                    "average shares",
+                    "common shares",
+                    "diluted shares",
+                    "shares",
+                    "weighted average",
+                    "outstanding"
+                ],
+                exclude_keywords=["basic"],
+                period=period_end,
+                ttm=False
+            )
+            if not shares:
+                shares, shares_label = get_value_from_label(
+                    income_df,
+                    label_keywords=["shares outstanding"],
+                    exclude_keywords=[],
+                    period=period_end,
+                    ttm=False
+                )
+            # Fallback 2: Compute shares using SAME-PERIOD income if possible
+            if not shares and eps:
+                # Try to get same-period net income (not TTM) from the chosen net income row
+                same_period_income = None
+                # Reuse the winning income row by rerunning a non-TTM fetch that returns the period value
+                same_period_income, _ = get_value_from_label(
+                    income_df,
+                    label_keywords=["net income", "profit"],
+                    exclude_keywords=["attributable to", "per share", "before tax", "comprehensive"],
+                    period=period_end,
+                    ttm=False
+                )
+                if same_period_income and same_period_income != 0:
+                    est = same_period_income / eps
+                    if est > 1e5:
+                        shares = est
+                        shares_label = "Estimated (Same-period Net Income / EPS)"
+
+            # Fallback 3: last resort from TTM income and EPS×4
+            if not shares and eps and income:
+                est = income / (eps * (4 if latest_type != "10-K" else 1))
+                if est > 1e5:
+                    shares = est
+                    shares_label = "Estimated (TTM Net Income / (EPS×4))"
+
+
+            return revenue, revenue_label, income, income_label, eps, eps_label, shares, shares_label
+
+        # --- Compute metrics (one call only) ---
+        if latest_type == "10-K":
+            revenue, revenue_label, income, income_label, eps, eps_label, shares, shares_label = extract_financial_metrics(ttm=False)
+            print(f"✓ {ticker}: Latest filing is annual (10-K). Using reported annual values.")
+        else:
+            revenue, revenue_label, income, income_label, eps, eps_label, shares, shares_label = extract_financial_metrics(ttm=True)
+            print(f"✓ {ticker}: Latest filing is quarterly. Using last 4 quarters for TTM.")
+
+        # --- Print summary ---
+        print(f"   Revenue line: '{revenue_label}' → ${revenue:,.0f}" if revenue else "   ⚠️ No revenue line detected.")
+        print(f"   Net Income line: '{income_label}' → ${income:,.0f}" if income else "   ⚠️ No income line detected.")
+        print(f"   EPS line: '{eps_label}' → ${eps:,.2f}" if eps else "   ⚠️ No EPS line detected.")
+        print(f"   Shares line: '{shares_label}' → {shares:,.0f}" if shares else "   ⚠️ No shares line detected.")
+
+        # --- Return structured output ---
         return {
             "company_name": c.name,
             "revenue": revenue,
+            "income": income,
+            "revenue_label": revenue_label,
+            "income_label": income_label,
             "shares": shares,
+            "latest_eps": eps,
             "filing_date": filing_date,
             "period_end": period_end,
-            "raw_data": raw_data
+            "raw_data": {
+                "income_statement": income_df,
+                "balance_sheet": balance_df,
+                "cash_flow": cashflow_df,
+                "filing_metadata": filing_metadata,
+            },
         }
-        
+
     except Exception as e:
-        print(f"  Error: {e}")
+        print(f"  Error for {ticker}: {e}")
         return None
 
 
 def store_financial_data(ticker, data):
     """Store financial data in Supabase database"""
-    # Convert raw_data dict to JSON string
-    raw_data_json = json.dumps(data.get('raw_data')) if data.get('raw_data') else None
+    # Convert raw_data dict to JSON string (handle DataFrames)
+    raw_data_json = None
+    if data.get('raw_data'):
+        raw_data = data['raw_data']
+        serializable_data = {
+            'income_statement': raw_data.get('income_statement').to_dict() if raw_data.get('income_statement') is not None else None,
+            'balance_sheet': raw_data.get('balance_sheet').to_dict() if raw_data.get('balance_sheet') is not None else None,
+            'cash_flow': raw_data.get('cash_flow').to_dict() if raw_data.get('cash_flow') is not None else None,
+            'filing_metadata': raw_data.get('filing_metadata', [])
+        }
+        raw_data_json = json.dumps(serializable_data)
     
     # Determine filing type from most recent period
     filing_type = '10-K/10-Q'  # Mixed filings
-    if data.get('raw_data') and data['raw_data'].get('period_metadata'):
+    if data.get('raw_data') and data['raw_data'].get('filing_metadata'):
         # Use the type of the most recent period
-        filing_type = data['raw_data']['period_metadata'][0].get('type', '10-K/10-Q')
+        filing_type = data['raw_data']['filing_metadata'][0].get('type', '10-K/10-Q')
     
     return store_company_financials(
         ticker.upper(),
@@ -791,7 +627,11 @@ def store_financial_data(ticker, data):
         data['filing_date'],
         data['period_end'],
         filing_type,
-        raw_data_json
+        raw_data_json,
+        income=data.get('income'),
+        latest_eps=data.get('latest_eps'),
+        revenue_label=data.get('revenue_label'),
+        income_label=data.get('income_label')
     )
 
 
@@ -804,6 +644,37 @@ def init_database():
         sys.exit(1)
     print("✓ Supabase connection configured\n")
 
+def normalize_financial_data(data: dict) -> dict:
+    """
+    Minimal normalization step.
+    Keeps raw_data and company_name unchanged.
+    Ensures top-level numeric fields are floats and safe for JSON serialization.
+    """
+
+    if not data or not isinstance(data, dict):
+        return {}
+
+    # Always preserve these fields
+    normalized = {
+        "company_name": data.get("company_name"),
+        "raw_data": data.get("raw_data"),
+    }
+
+    # Normalize numeric fields if present
+    numeric_fields = ["revenue", "income", "shares", "latest_eps"]
+    for field in numeric_fields:
+        val = data.get(field)
+        try:
+            normalized[field] = float(val) if val not in (None, "", "NaN") else None
+        except (TypeError, ValueError):
+            normalized[field] = None
+
+    # Preserve metadata fields (safe strings only)
+    for meta in ["revenue_label", "income_label", "filing_date", "period_end"]:
+        normalized[meta] = data.get(meta)
+
+    return normalized
+
 
 def main():
     print("\n" + "="*60)
@@ -811,7 +682,6 @@ def main():
     print("="*60)
     print("\nThis will fetch latest 10-K + last 4 10-Q filings")
     print("for S&P 500 companies and store in the database.")
-    print("This enables accurate TTM (Trailing Twelve Months) calculations.\n")
     
     # Initialize database
     init_database()
@@ -882,179 +752,40 @@ def main():
         sys.stdout.flush()
         
         data = get_financial_data(ticker_upper)
-        
-        if data:
-            # Apply scale normalization
-            data = normalize_financial_data(data)
-            
-            # Validate normalization
-            norm_validation = validate_normalization(data)
-            if not norm_validation['valid']:
-                for warning in norm_validation['warnings']:
-                    print(f"\n   ⚠️  Scale warning: {warning}")
-            
-            # Validate data quality
-            dq = DataQuality()
-            is_valid = validate_financial_data(ticker_upper, data, dq)
-            
-            # Track issues for summary
-            if "Revenue not found" in str(dq.issues):
-                quality_report['missing_revenue'].append(ticker_upper)
-            if "Shares outstanding not found" in str(dq.issues):
-                quality_report['missing_shares'].append(ticker_upper)
-            if "Equity not found" in str(dq.warnings):
-                quality_report['missing_equity'].append(ticker_upper)
-            if "Debt not found" in str(dq.warnings):
-                quality_report['missing_debt'].append(ticker_upper)
-            if "Operating cash flow not found" in str(dq.warnings):
-                quality_report['missing_ocf'].append(ticker_upper)
-            if "Market cap seems" in str(dq.warnings):
-                quality_report['market_cap_issues'].append(ticker_upper)
-            
-            # Store data (even if has warnings, but not if critical issues)
-            if is_valid:
-                store_financial_data(ticker_upper, data)
-                action = "Updated" if ticker_upper in existing else "Stored"
-                summary = dq.get_summary()
-                print(f"✓ {action} - {summary}")
-                
-                if verbose and (dq.warnings or dq.issues):
-                    print(dq.get_details())
-                
-                if dq.warnings:
-                    warning_count += 1
-                success_count += 1
-            else:
-                print(f"✗ Critical issues - NOT stored")
-                print(dq.get_details())
-                critical_issue_tickers.append({
-                    'ticker': ticker_upper,
-                    'issues': dq.issues,
-                    'warnings': dq.warnings,
-                    'company_name': data.get('company_name', 'Unknown')
-                })
-                fail_count += 1
-        else:
+        if not data:
             print("✗ Failed to fetch data")
             failed_tickers.append(ticker_upper)
             fail_count += 1
-        
-        # Respectful delay
-        if i < len(tickers):
             time.sleep(0.5)
-    
-    # Detailed Summary
+            continue
+
+        # Normalize to real dollars
+        data = normalize_financial_data(data)
+
+        # Validate for completeness / sanity
+        dq = DataQuality()
+        is_valid = validate_financial_data(ticker_upper, data, dq)
+
+        if is_valid:
+            store_financial_data(ticker_upper, data)
+            print(f"✓ {ticker_upper}: Stored ({dq.get_summary()})")
+            success_count += 1
+        else:
+            print(f"✗ {ticker_upper}: Critical data issues, not stored")
+            print(dq.get_details())
+            critical_issue_tickers.append({'ticker': ticker_upper, **dq.__dict__})
+            fail_count += 1
+
+        time.sleep(0.5)
+
     print("\n" + "="*80)
-    print("Import Complete - Data Quality Report")
+    print("Import Complete - Summary")
     print("="*80)
     print(f"\n📊 IMPORT STATISTICS:")
     print(f"  ✓ Successfully imported: {success_count}")
-    print(f"  ⚠️  Imported with warnings: {warning_count}")
-    print(f"  ⏭️  Already in database: {skip_count}")
     print(f"  ✗ Failed: {fail_count}")
-    print(f"  📁 Total in database: {success_count + skip_count}")
-    
-    print(f"\n🔍 DATA QUALITY ISSUES:")
-    
-    if quality_report['missing_revenue']:
-        print(f"\n  ❌ Missing Revenue ({len(quality_report['missing_revenue'])} companies):")
-        print(f"     {', '.join(quality_report['missing_revenue'][:10])}")
-        if len(quality_report['missing_revenue']) > 10:
-            print(f"     ... and {len(quality_report['missing_revenue']) - 10} more")
-    
-    if quality_report['missing_shares']:
-        print(f"\n  ❌ Missing Shares Outstanding ({len(quality_report['missing_shares'])} companies):")
-        print(f"     {', '.join(quality_report['missing_shares'][:10])}")
-        if len(quality_report['missing_shares']) > 10:
-            print(f"     ... and {len(quality_report['missing_shares']) - 10} more")
-    
-    if quality_report['missing_equity']:
-        print(f"\n  ⚠️  Missing Equity ({len(quality_report['missing_equity'])} companies):")
-        print(f"     {', '.join(quality_report['missing_equity'][:10])}")
-        if len(quality_report['missing_equity']) > 10:
-            print(f"     ... and {len(quality_report['missing_equity']) - 10} more")
-    
-    if quality_report['missing_debt']:
-        print(f"\n  ⚠️  Missing Debt ({len(quality_report['missing_debt'])} companies):")
-        print(f"     {', '.join(quality_report['missing_debt'][:10])}")
-        if len(quality_report['missing_debt']) > 10:
-            print(f"     ... and {len(quality_report['missing_debt']) - 10} more")
-    
-    if quality_report['missing_ocf']:
-        print(f"\n  ⚠️  Missing Operating Cash Flow ({len(quality_report['missing_ocf'])} companies):")
-        print(f"     {', '.join(quality_report['missing_ocf'][:10])}")
-        if len(quality_report['missing_ocf']) > 10:
-            print(f"     ... and {len(quality_report['missing_ocf']) - 10} more")
-    
-    if quality_report['market_cap_issues']:
-        print(f"\n  ⚠️  Market Cap Validation Issues ({len(quality_report['market_cap_issues'])} companies):")
-        print(f"     {', '.join(quality_report['market_cap_issues'][:10])}")
-        if len(quality_report['market_cap_issues']) > 10:
-            print(f"     ... and {len(quality_report['market_cap_issues']) - 10} more")
-    
-    if not any(quality_report.values()):
-        print("  ✓ No data quality issues detected!")
-    
-    # Calculate data completeness percentage
-    total_processed = success_count + fail_count
-    if total_processed > 0:
-        completeness = {
-            'revenue': 100 * (1 - len(quality_report['missing_revenue']) / total_processed),
-            'shares': 100 * (1 - len(quality_report['missing_shares']) / total_processed),
-            'equity': 100 * (1 - len(quality_report['missing_equity']) / total_processed),
-            'debt': 100 * (1 - len(quality_report['missing_debt']) / total_processed),
-            'ocf': 100 * (1 - len(quality_report['missing_ocf']) / total_processed)
-        }
-        
-        print(f"\n📈 DATA COMPLETENESS:")
-        print(f"  Revenue:              {completeness['revenue']:.1f}%")
-        print(f"  Shares Outstanding:   {completeness['shares']:.1f}%")
-        print(f"  Equity:               {completeness['equity']:.1f}%")
-        print(f"  Debt:                 {completeness['debt']:.1f}%")
-        print(f"  Operating Cash Flow:  {completeness['ocf']:.1f}%")
-    
-    print("\n" + "="*80)
-    
-    # Save failed tickers to files for debugging
-    if failed_tickers or critical_issue_tickers:
-        print("\n💾 Saving error reports...")
-        
-        # Save fetch failures
-        if failed_tickers:
-            failed_file = Path(__file__).parent / "failed_tickers.txt"
-            with open(failed_file, 'w') as f:
-                f.write("# Tickers that failed to fetch from Edgar\n")
-                f.write(f"# Generated: {datetime.now().isoformat()}\n")
-                f.write(f"# Total: {len(failed_tickers)}\n\n")
-                for ticker in failed_tickers:
-                    f.write(f"{ticker}\n")
-            print(f"  ✓ Saved {len(failed_tickers)} fetch failures to: {failed_file}")
-        
-        # Save critical issues with details
-        if critical_issue_tickers:
-            critical_file = Path(__file__).parent / "critical_issues.json"
-            with open(critical_file, 'w') as f:
-                json.dump({
-                    'generated': datetime.now().isoformat(),
-                    'total': len(critical_issue_tickers),
-                    'tickers': critical_issue_tickers
-                }, f, indent=2)
-            print(f"  ✓ Saved {len(critical_issue_tickers)} critical issues to: {critical_file}")
-            
-            # Also save simple list for debugging script
-            critical_list_file = Path(__file__).parent / "critical_tickers.txt"
-            with open(critical_list_file, 'w') as f:
-                f.write("# Tickers with critical data issues (missing revenue or shares)\n")
-                f.write(f"# Generated: {datetime.now().isoformat()}\n")
-                f.write(f"# Total: {len(critical_issue_tickers)}\n\n")
-                for item in critical_issue_tickers:
-                    f.write(f"{item['ticker']}\n")
-            print(f"  ✓ Saved ticker list to: {critical_list_file}")
-        
-        print(f"\n  📋 To debug these tickers, run:")
-        print(f"     python scripts/debug_ticker.py <TICKER>")
-    
-    print()
+    print(f"  ⏭️  Skipped (already in DB): {skip_count}")
+    print(f"  📁 Total processed: {success_count + skip_count + fail_count}")
 
 
 if __name__ == "__main__":

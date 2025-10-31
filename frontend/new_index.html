@@ -16,6 +16,10 @@
     #foundersScroll::-webkit-scrollbar-thumb {
       background-color: #cbd5e1; border-radius: 4px;
     }
+    #searchResults.hidden,
+    #recommendedResults.hidden {
+      display: none !important;
+    }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen flex">
@@ -142,35 +146,87 @@
 </div>
 
 <!-- Recommended Filters -->
-<div id="recommendedFilters" class="hidden bg-gray-50 border border-gray-200 rounded-lg p-4 mt-4">
-  <label class="block text-sm font-medium text-gray-700 mb-2">Filter by Tree Path</label>
-  <select id="recommendedTreePath"
+<div id="treePathFilters" class="space-y-3 hidden">
+  <label class="block text-sm font-medium text-gray-700 mb-1">
+    Filter by Tree Path (broad → specific)
+  </label>
+
+  <select id="treeLevel1"
+          onchange="updateTreeLevel2()"
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-    <option value="">All</option>
+    <option value="">All Top Categories</option>
   </select>
-  <button onclick="loadRecommendedFiltered()" class="btn-primary text-white px-4 py-2 rounded-lg font-semibold mt-3">
-    Apply Filter
+
+<div id="treeLevel2Container" class="hidden">
+  <select id="treeLevel2"
+          onchange="updateTreeLevel3()"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+    <option value="">All Subcategories</option>
+  </select>
+</div>
+
+
+<div id="treeLevel3Container" class="hidden">
+  <select id="treeLevel3"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+    <option value="">All Sub-Subcategories</option>
+  </select>
+</div>
+</div>
+<!-- Search Filters -->
+<div id="searchPanel" class="space-y-3 hidden">
+  <label class="block text-sm font-medium text-gray-700 mb-1">
+    Search Founders
+  </label>
+  <!-- Tree Path Filters for Search -->
+<div class="space-y-2">
+  <label class="block text-sm font-medium text-gray-700 mb-1">
+    Filter by Tree Path (optional)
+  </label>
+
+  <select id="searchTreeLevel1"
+          onchange="updateSearchTreeLevel2()"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+    <option value="">All Top Categories</option>
+  </select>
+
+  <div id="searchTreeLevel2Container" class="hidden">
+  <select id="searchTreeLevel2"
+          onchange="updateSearchTreeLevel3()"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          disabled>
+    <option value="">All Subcategories</option>
+  </select>
+  </div>
+
+  <div id="searchTreeLevel3Container" class="hidden">
+  <select id="searchTreeLevel3"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          disabled>
+    <option value="">All Sub-Subcategories</option>
+  </select>
+</div>
+</div>
+
+
+  <input id="searchKeyword" type="text"
+         placeholder="Keyword (e.g. company or founder)"
+         class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+
+  <select id="searchLocation"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+    <option value="">All Locations</option>
+  </select>
+
+  <input id="searchTag" type="text"
+         placeholder="Tag (optional)"
+         class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+
+  <button onclick="searchFounders()"
+          class="w-full mt-2 btn-primary text-white py-2 px-4 rounded-lg font-semibold">
+    Search
   </button>
 </div>
-
-<!-- Search Filters -->
-<div id="searchPanel" class="hidden bg-gray-50 border border-gray-200 rounded-lg p-4 mt-4">
-  <h3 class="text-lg font-semibold text-brand mb-2">Filter Founders</h3>
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-    <input id="searchKeyword" type="text" placeholder="Keyword"
-           class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-    <select id="searchLocation" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-      <option value="">All Locations</option>
-    </select>
-    <select id="searchTreePath" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-      <option value="">All Tree Paths</option>
-    </select>
-  </div>
-  <div class="flex justify-end mt-4">
-    <button onclick="searchFounders()" class="btn-primary text-white px-4 py-2 rounded-lg font-semibold">Search</button>
-  </div>
-</div>
-
 
 
 
@@ -183,9 +239,17 @@
           <p class="text-sm text-gray-600 mt-2">Loading...</p>
         </div>
 
-        <div id="foundersResults" class="hidden overflow-y-auto max-h-[700px] border border-gray-200 rounded-lg p-3">
-          <div id="foundersScroll" class="flex flex-col gap-4"></div>
-        </div>
+        <!-- Recommended results -->
+      <div id="recommendedResults" class="hidden overflow-y-auto max-h-[700px] border border-gray-200 rounded-lg p-3">
+        <div id="recommendedScroll" class="flex flex-col gap-4"></div>
+      </div>
+
+      <!-- Search results -->
+      <div id="searchResults"
+     class="hidden overflow-y-auto max-h-[700px] border border-gray-200 rounded-lg p-3">
+  <div id="searchScroll" class="flex flex-col gap-4"></div>
+</div>
+
       </div>
 
       <!-- Right: detail panel -->
@@ -733,42 +797,38 @@ function toggleSearchPanel() {
 
 // Search and reuse loadFounders-style rendering
 async function searchFounders() {
+  // clear previous
   $("foundersLoading").classList.remove("hidden");
-  $("foundersResults").classList.add("hidden");
-  $("foundersScroll").innerHTML = "";
+  $("searchResults").classList.add("hidden");
+  $("searchScroll").innerHTML = "";
 
   const keyword = $("searchKeyword").value.trim();
   const location = $("searchLocation").value.trim();
-  const tree_path = $("searchTreePath").value.trim();
-  const tagEl = $("searchTag");
-  const tag = tagEl ? tagEl.value.trim() : "";
-
+  const tree_path_prefix = getSearchSelectedTreePath();
+  const tag = $("searchTag")?.value.trim() || "";
 
   const query = new URLSearchParams();
   if (keyword) query.append("keyword", keyword);
   if (location) query.append("location", location);
-  if (tree_path) query.append("tree_path", tree_path);
+  if (tree_path_prefix) query.append("tree_path_prefix", tree_path_prefix);
   if (tag) query.append("tag", tag);
-
 
   try {
     const res = await fetch(`${FOUNDERS_API}/search?${query.toString()}`, {
-      headers: {
-        "x-api-key": "5f8e7ac4f6f8a3b6b2d91c66e01d0f7d1a91f4f4bfc1f3263e57b85c14f6a733"
-      }
+      headers: { "x-api-key": API_KEY }
     });
     const json = await res.json();
     const data = json.data || [];
 
     $("foundersLoading").classList.add("hidden");
-    $("foundersResults").classList.remove("hidden");
 
     if (!data.length) {
-      $("foundersScroll").innerHTML = `<p class="text-gray-500 px-4">No results found.</p>`;
+      $("searchResults").classList.remove("hidden");
+      $("searchScroll").innerHTML = `<p class="text-gray-500 px-4">No results found.</p>`;
       return;
     }
 
-    const scroll = $("foundersScroll");
+    const scroll = $("searchScroll");
     for (const row of data.slice(0, 50)) {
       const company = row.company_name || "Unknown";
       const treePath = row.tree_path || "—";
@@ -785,19 +845,24 @@ async function searchFounders() {
           <h3 class="font-semibold text-brand text-lg truncate">${company}</h3>
           <p class="text-xs text-gray-500 mt-1">${treePath}</p>
         </div>
-        ${tags.length
-          ? `<div class="flex flex-wrap gap-1 mt-3">
-              ${tags.map(t => `<span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">${t}</span>`).join("")}
-            </div>`
-          : ""}
+        ${
+          tags.length
+            ? `<div class="flex flex-wrap gap-1 mt-3">
+                ${tags.map(t => `<span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">${t}</span>`).join("")}
+              </div>`
+            : ""
+        }
       `;
       card.addEventListener("click", () => openFounderModal(row));
       scroll.appendChild(card);
     }
+
+    $("searchResults").classList.remove("hidden");
   } catch (err) {
     console.error(err);
     $("foundersLoading").classList.add("hidden");
-    $("foundersScroll").innerHTML = `<p class="text-red-500 px-4">Search failed.</p>`;
+    $("searchResults").classList.remove("hidden");
+    $("searchScroll").innerHTML = `<p class="text-red-500 px-4">Search failed.</p>`;
   }
 }
 
@@ -818,6 +883,16 @@ function populateSelect(selectEl, items) {
   }
   selectEl.appendChild(frag);
 }
+function expandTreePrefixes(treePaths) {
+  const prefixes = new Set();
+  for (const path of treePaths) {
+    const parts = path.split(" > ");
+    for (let i = 1; i <= parts.length; i++) {
+      prefixes.add(parts.slice(0, i).join(" > "));
+    }
+  }
+  return Array.from(prefixes).sort();
+}
 
 async function loadFilters() {
   try {
@@ -828,41 +903,220 @@ async function loadFilters() {
     const locations = json.locations || [];
     const treePaths = json.tree_paths || [];
 
-    const locSel         = $("searchLocation");
-    const searchTreeSel  = $("searchTreePath");
-    const recTreeSel     = $("recommendedTreePath");
-
-    populateSelect(locSel, locations);
-    populateSelect(searchTreeSel, treePaths);
-    populateSelect(recTreeSel, treePaths);
+    populateSelect($("searchLocation"), locations);
+    buildTreeHierarchy(treePaths);
+    populateTreeLevel1(); // for recommended
+    populateSearchTreeLevel1(); // for search
   } catch (e) {
     console.error("Failed to load filters", e);
   }
 }
+function populateSearchTreeLevel1() {
+  const allowedTopLevels = ["AI", "Fintech", "Healthcare", "Commerce", "Other"];
+  const l1Sel = $("searchTreeLevel1");
+  l1Sel.innerHTML = "<option value=''>All Top Categories</option>";
+
+  const validKeys = Object.keys(treeHierarchy)
+    .filter(k => allowedTopLevels.includes(k));
+
+  for (const k of validKeys.sort()) {
+    const opt = document.createElement("option");
+    opt.value = k;
+    opt.textContent = k;
+    l1Sel.appendChild(opt);
+  }
+
+  $("searchTreeLevel2").disabled = true;
+  $("searchTreeLevel3").disabled = true;
+}
+
+
+
+function buildTreeHierarchy(treePaths) {
+  treeHierarchy = {};
+  for (const path of treePaths) {
+    const parts = path.split(" > ");
+    parts.reduce((acc, part) => acc[part] ||= {}, treeHierarchy);
+  }
+}
+
+function populateTreeLevel1() {
+  const allowedTopLevels = ["AI", "Fintech", "Healthcare", "Commerce", "Other"];
+  const l1Sel = $("treeLevel1");
+  l1Sel.innerHTML = "<option value=''>All Top Categories</option>";
+
+  const validKeys = Object.keys(treeHierarchy)
+    .filter(k => allowedTopLevels.includes(k));
+
+  for (const k of validKeys.sort()) {
+    const opt = document.createElement("option");
+    opt.value = k;
+    opt.textContent = k;
+    l1Sel.appendChild(opt);
+  }
+
+  $("treeLevel2").disabled = true;
+  $("treeLevel3").disabled = true;
+}
+
+
+function updateTreeLevel2() {
+  const l1 = $("treeLevel1").value;
+  const l2Sel = $("treeLevel2");
+  const l3Sel = $("treeLevel3");
+  const l2Container = $("treeLevel2Container");
+  const l3Container = $("treeLevel3Container");
+
+  // reset
+  l2Sel.innerHTML = "<option value=''>All Subcategories</option>";
+  l3Sel.innerHTML = "<option value=''>All Sub-Subcategories</option>";
+  l3Sel.disabled = true;
+  l3Container.classList.add("hidden");
+
+  if (!l1) {
+    l2Sel.disabled = true;
+    l2Container.classList.add("hidden");
+    return;
+  }
+
+  const subs = Object.keys(treeHierarchy[l1] || {});
+  l2Sel.disabled = !subs.length;
+  l2Container.classList.toggle("hidden", !subs.length);
+
+  for (const s of subs.sort()) {
+    const opt = document.createElement("option");
+    opt.value = s;
+    opt.textContent = s;
+    l2Sel.appendChild(opt);
+  }
+}
+
+function updateTreeLevel3() {
+  const l1 = $("treeLevel1").value;
+  const l2 = $("treeLevel2").value;
+  const l3Sel = $("treeLevel3");
+  const l3Container = $("treeLevel3Container");
+
+  l3Sel.innerHTML = "<option value=''>All Sub-Subcategories</option>";
+
+  if (!l2) {
+    l3Sel.disabled = true;
+    l3Container.classList.add("hidden");
+    return;
+  }
+
+  const subs = Object.keys(treeHierarchy[l1]?.[l2] || {});
+  l3Sel.disabled = !subs.length;
+  l3Container.classList.toggle("hidden", !subs.length);
+
+  for (const s of subs.sort()) {
+    const opt = document.createElement("option");
+    opt.value = s;
+    opt.textContent = s;
+    l3Sel.appendChild(opt);
+  }
+}
+
+function updateSearchTreeLevel2() {
+  const l1 = $("searchTreeLevel1").value;
+  const l2Sel = $("searchTreeLevel2");
+  const l3Sel = $("searchTreeLevel3");
+  const l2Container = $("searchTreeLevel2Container");
+  const l3Container = $("searchTreeLevel3Container");
+
+  // reset
+  l2Sel.innerHTML = "<option value=''>All Subcategories</option>";
+  l3Sel.innerHTML = "<option value=''>All Sub-Subcategories</option>";
+  l3Sel.disabled = true;
+  l3Container.classList.add("hidden");
+
+  if (!l1) {
+    l2Sel.disabled = true;
+    l2Container.classList.add("hidden");
+    return;
+  }
+
+  const subs = Object.keys(treeHierarchy[l1] || {});
+  l2Sel.disabled = !subs.length;
+  l2Container.classList.toggle("hidden", !subs.length);
+
+  for (const s of subs.sort()) {
+    const opt = document.createElement("option");
+    opt.value = s;
+    opt.textContent = s;
+    l2Sel.appendChild(opt);
+  }
+}
+
+function updateSearchTreeLevel3() {
+  const l1 = $("searchTreeLevel1").value;
+  const l2 = $("searchTreeLevel2").value;
+  const l3Sel = $("searchTreeLevel3");
+  const l3Container = $("searchTreeLevel3Container");
+
+  l3Sel.innerHTML = "<option value=''>All Sub-Subcategories</option>";
+
+  if (!l2) {
+    l3Sel.disabled = true;
+    l3Container.classList.add("hidden");
+    return;
+  }
+
+  const subs = Object.keys(treeHierarchy[l1]?.[l2] || {});
+  l3Sel.disabled = !subs.length;
+  l3Container.classList.toggle("hidden", !subs.length);
+
+  for (const s of subs.sort()) {
+    const opt = document.createElement("option");
+    opt.value = s;
+    opt.textContent = s;
+    l3Sel.appendChild(opt);
+  }
+}
+
+function getSearchSelectedTreePath() {
+  const parts = [
+    $("searchTreeLevel1").value,
+    $("searchTreeLevel2").value,
+    $("searchTreeLevel3").value
+  ].filter(Boolean);
+  return parts.join(" > ");
+}
+
+
+function getSelectedTreePath() {
+  const parts = [
+    $("treeLevel1").value,
+    $("treeLevel2").value,
+    $("treeLevel3").value
+  ].filter(Boolean);
+  return parts.join(" > ");
+}
 
 async function loadRecommendedFiltered() {
-  const treePath = $("recommendedTreePath").value.trim();
+  const treePath = getSelectedTreePath();
+
   $("foundersLoading").classList.remove("hidden");
-  $("foundersResults").classList.add("hidden");
-  $("foundersScroll").innerHTML = "";
+  $("recommendedResults").classList.add("hidden");
+  $("recommendedScroll").innerHTML = "";
 
   try {
-    const query = treePath ? `?tree_path=${encodeURIComponent(treePath)}` : "";
+    const query = treePath ? `?tree_path_prefix=${encodeURIComponent(treePath)}` : "";
     const res = await fetch(`${FOUNDERS_API}/recommended-founders${query}`, {
       headers: { "x-api-key": API_KEY }
     });
     const json = await res.json();
-    let data = json.data || [];
+    const data = json.data || [];
 
     $("foundersLoading").classList.add("hidden");
-    $("foundersResults").classList.remove("hidden");
 
     if (!data.length) {
-      $("foundersScroll").innerHTML = `<p class="text-gray-500 px-4">No results found.</p>`;
+      $("recommendedResults").classList.remove("hidden");
+      $("recommendedScroll").innerHTML = `<p class="text-gray-500 px-4">No results found.</p>`;
       return;
     }
 
-    const scroll = $("foundersScroll");
+    const scroll = $("recommendedScroll");
     for (const row of data.slice(0, 50)) {
       const company = row.company_name || "Unknown";
       const treePath = row.tree_path || "—";
@@ -888,28 +1142,45 @@ async function loadRecommendedFiltered() {
       card.addEventListener("click", () => openFounderModal(row));
       scroll.appendChild(card);
     }
+
+    $("recommendedResults").classList.remove("hidden");
   } catch (err) {
     console.error(err);
     $("foundersLoading").classList.add("hidden");
-    $("foundersScroll").innerHTML = `<p class="text-red-500 px-4">Error loading data.</p>`;
+    $("recommendedScroll").innerHTML = `<p class="text-red-500 px-4">Error loading data.</p>`;
   }
 }
+
 function showTab(tab) {
-  // reset all
-  $("recommendedFilters").classList.add("hidden");
-  $("searchPanel").classList.add("hidden");
+  $("treePathFilters").classList.add("hidden");
+  $("searchPanel")?.classList.add("hidden");
+
+  $("recommendedResults").classList.add("hidden");
+  $("searchResults").classList.add("hidden");
 
   $("recommendedTab").classList.remove("bg-blue-700");
   $("searchTab").classList.remove("bg-blue-700");
 
   if (tab === "recommended") {
     $("recommendedTab").classList.add("bg-blue-700");
-    $("recommendedFilters").classList.remove("hidden");
+    $("treePathFilters").classList.remove("hidden");
+    $("recommendedResults").classList.remove("hidden");
+    if ($("recommendedScroll").children.length === 0)
+      loadRecommendedFiltered();
   } else {
-    $("searchTab").classList.add("bg-blue-700");
-    $("searchPanel").classList.remove("hidden");
-  }
+  $("searchTab").classList.add("bg-blue-700");
+  $("searchPanel")?.classList.remove("hidden");
+
+  // Only show results if we already have data
+  const hasResults = $("searchScroll").children.length > 0;
+  $("searchResults").classList.toggle("hidden", !hasResults);
 }
+
+}
+
+
+
+
 
 </script>
 
