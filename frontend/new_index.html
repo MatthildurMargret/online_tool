@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Valuation Tool</title>
+  <link rel="icon" type="image/png" href="favicon.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .btn-primary { background-color:#161f6d; }
@@ -20,27 +21,61 @@
     #recommendedResults.hidden {
       display: none !important;
     }
+    .tab-btn {
+      transition: all 0.25s ease;
+    }
+
+    .tab-btn:hover {
+      color: #161f6d; /* your brand color */
+    }
+
+    .tab-btn.active {
+      border-color: #161f6d;
+      color: #161f6d;
+    }
+
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen flex">
+<body class="min-h-screen flex" style="background: linear-gradient(to bottom right, #F9FAFF, #E3F1FF, #E3F1FF);">
   <!-- Sidebar -->
-  <aside class="w-64 bg-[#161f6d] text-white p-6 flex flex-col gap-3">
-    <h1 class="text-2xl font-bold mb-6">Dashboard</h1>
+  <aside class="w-64 text-white p-6 flex flex-col gap-3" style="background-color: #161F6D;">
+    <div class="mb-6 pl-3 flex items-center">
+  <img src="montage_logo.png" alt="Monty Logo" class="h-12 object-contain">
+</div>
+
+    <button id="btn-welcomeModule"
+        class="sidebar-btn text-left py-2 px-3 rounded hover:bg-blue-800"
+        onclick="showModule('welcomeModule')">
+  Home
+</button>
+
     <button id="btn-valuationModule"
-            class="sidebar-btn text-left py-2 px-3 rounded bg-blue-700 hover:bg-blue-800"
+            class="sidebar-btn text-left py-2 px-3 rounded hover:bg-blue-800"
             onclick="showModule('valuationModule')">
-      Valuation Tool
+      Public Market Data 
     </button>
     <button id="btn-foundersModule"
             class="sidebar-btn text-left py-2 px-3 rounded hover:bg-blue-800"
             onclick="showModule('foundersModule')">
-      Founder Recommendations
+      Sourcing Recommendations
     </button>
   </aside>
 
   <!-- Main content area -->
   <main class="flex-1 p-8 overflow-y-auto">
-    <div id="valuationModule" class="space-y-10">
+    <!-- Welcome page (default) -->
+<div id="welcomeModule" class="space-y-10">
+  <div class="bg-white rounded-xl shadow-lg w-full max-w-3xl p-6 mx-auto text-center">
+    <h2 class="text-2xl font-bold text-brand mb-4">Welcome to Monty</h2>
+    <p class="text-gray-600">
+      Use the sidebar to explore Monty’s Valuation Tool or Founder Recommendations.
+    </p>
+  </div>
+</div>
+
+
+    <div id="valuationModule" class="space-y-10 hidden">
+
 
   <!-- Single Stock Section -->
   <div class="bg-white rounded-xl shadow-lg w-full max-w-3xl p-6 space-y-6 mx-auto">
@@ -134,34 +169,39 @@
     <h2 class="text-2xl font-bold text-brand text-center mb-4">Monty's Sourcing Recommendations</h2>
 
 <!-- Tabs (always visible) -->
-<div class="flex justify-center gap-3 mt-4">
-  <button onclick="showTab('recommended')" id="recommendedTab"
-          class="btn-primary text-white px-4 py-2 rounded-lg font-semibold">
+<div class="flex justify-center border-b border-gray-300 mt-4">
+  <button
+    id="recommendedTab"
+    onclick="showTab('recommended')"
+    class="tab-btn border-b-2 border-blue-700 text-blue-700 font-semibold px-6 py-2">
     Recommended
   </button>
-  <button onclick="showTab('search')" id="searchTab"
-          class="bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-gray-700">
+  <button
+    id="searchTab"
+    onclick="showTab('search')"
+    class="tab-btn border-b-2 border-transparent text-gray-600 hover:text-blue-700 px-6 py-2">
     Search Database
   </button>
 </div>
 
+
 <!-- Recommended Filters -->
 <div id="treePathFilters" class="space-y-3 hidden">
   <label class="block text-sm font-medium text-gray-700 mb-1">
-    Filter by Tree Path (broad → specific)
+    Filter by vertical 
   </label>
 
   <select id="treeLevel1"
           onchange="updateTreeLevel2()"
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-    <option value="">All Top Categories</option>
+    <option value="">All</option>
   </select>
 
 <div id="treeLevel2Container" class="hidden">
   <select id="treeLevel2"
           onchange="updateTreeLevel3()"
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-    <option value="">All Subcategories</option>
+    <option value="">All</option>
   </select>
 </div>
 
@@ -169,25 +209,22 @@
 <div id="treeLevel3Container" class="hidden">
   <select id="treeLevel3"
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-    <option value="">All Sub-Subcategories</option>
+    <option value="">All</option>
   </select>
 </div>
 </div>
 <!-- Search Filters -->
 <div id="searchPanel" class="space-y-3 hidden">
-  <label class="block text-sm font-medium text-gray-700 mb-1">
-    Search Founders
-  </label>
   <!-- Tree Path Filters for Search -->
 <div class="space-y-2">
   <label class="block text-sm font-medium text-gray-700 mb-1">
-    Filter by Tree Path (optional)
+    Optional filters
   </label>
 
   <select id="searchTreeLevel1"
           onchange="updateSearchTreeLevel2()"
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-    <option value="">All Top Categories</option>
+    <option value="">All verticals</option>
   </select>
 
   <div id="searchTreeLevel2Container" class="hidden">
@@ -195,7 +232,7 @@
           onchange="updateSearchTreeLevel3()"
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
           disabled>
-    <option value="">All Subcategories</option>
+    <option value="">All</option>
   </select>
   </div>
 
@@ -203,7 +240,7 @@
   <select id="searchTreeLevel3"
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
           disabled>
-    <option value="">All Sub-Subcategories</option>
+    <option value="">All</option>
   </select>
 </div>
 </div>
@@ -215,11 +252,11 @@
 
   <select id="searchLocation"
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-    <option value="">All Locations</option>
+    <option value="">Location</option>
   </select>
 
   <input id="searchTag" type="text"
-         placeholder="Tag (optional)"
+         placeholder="Tag"
          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
 
   <button onclick="searchFounders()"
@@ -266,7 +303,7 @@
 
 <script>
 function showModule(id) {
-  ["valuationModule", "foundersModule"].forEach(m => 
+  ["welcomeModule", "valuationModule", "foundersModule"].forEach(m =>
     document.getElementById(m).classList.add("hidden")
   );
   document.getElementById(id).classList.remove("hidden");
@@ -276,8 +313,13 @@ function showModule(id) {
   );
   document.getElementById("btn-" + id).classList.add("bg-blue-700");
 
-  if (id === "foundersModule") loadFilters(); // add this line
+  if (id === "foundersModule") {
+    loadFilters().then(() => showTab("recommended"));
+  }
 }
+
+
+
 
 </script>
 
@@ -1152,35 +1194,37 @@ async function loadRecommendedFiltered() {
 }
 
 function showTab(tab) {
+  const recommendedBtn = $("recommendedTab");
+  const searchBtn = $("searchTab");
+
+  // Reset all tab styles
+  [recommendedBtn, searchBtn].forEach(btn => {
+    btn.classList.remove("active");
+    btn.classList.remove("border-blue-700", "text-blue-700");
+    btn.classList.add("border-transparent", "text-gray-600");
+  });
+
+  // Set active tab
+  const activeBtn = tab === "recommended" ? recommendedBtn : searchBtn;
+  activeBtn.classList.add("active", "border-blue-700", "text-blue-700");
+  activeBtn.classList.remove("border-transparent", "text-gray-600");
+
+  // Show correct panels
   $("treePathFilters").classList.add("hidden");
   $("searchPanel")?.classList.add("hidden");
-
   $("recommendedResults").classList.add("hidden");
   $("searchResults").classList.add("hidden");
 
-  $("recommendedTab").classList.remove("bg-blue-700");
-  $("searchTab").classList.remove("bg-blue-700");
-
   if (tab === "recommended") {
-    $("recommendedTab").classList.add("bg-blue-700");
     $("treePathFilters").classList.remove("hidden");
     $("recommendedResults").classList.remove("hidden");
-    if ($("recommendedScroll").children.length === 0)
-      loadRecommendedFiltered();
+    if ($("recommendedScroll").children.length === 0) loadRecommendedFiltered();
   } else {
-  $("searchTab").classList.add("bg-blue-700");
-  $("searchPanel")?.classList.remove("hidden");
-
-  // Only show results if we already have data
-  const hasResults = $("searchScroll").children.length > 0;
-  $("searchResults").classList.toggle("hidden", !hasResults);
+    $("searchPanel")?.classList.remove("hidden");
+    const hasResults = $("searchScroll").children.length > 0;
+    $("searchResults").classList.toggle("hidden", !hasResults);
+  }
 }
-
-}
-
-
-
-
 
 </script>
 
