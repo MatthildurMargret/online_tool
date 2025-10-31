@@ -814,24 +814,73 @@ async function loadFounders(endpoint) {
     $("foundersScroll").innerHTML = `<p class="text-red-500 px-4">Error loading data.</p>`;
   }
 }
+function clean(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "number" && isNaN(value)) return "";
+  const str = String(value).trim();
+  if (!str || str.toLowerCase() === "nan" || str.toLowerCase() === "none") return "";
+  return str;
+}
+
+
 function openFounderModal(data) {
   const panel = $("founderDetailPanel");
   const title = $("founderDetailTitle");
   const body = $("founderDetailBody");
 
-  title.textContent = data.company_name || "Founder Details";
-  body.innerHTML = `
-    <p><strong>Founder:</strong> ${data.name || "—"}</p>
-    <p><strong>Company:</strong> ${data.company_name || "—"}</p>
-    <p><strong>Description:</strong> ${data.product || "—"}</p>
-    <p><strong>Location:</strong> ${data.location || "—"}</p>
-    <p><strong>Access Date:</strong> ${data.access_date || "—"}</p>
-    ${data.profile_url ? `<p><strong>LinkedIn:</strong> <a href="${data.profile_url}" target="_blank" class="text-blue-600 underline">View Profile</a></p>` : ""}
-    ${data.company_website ? `<p><strong>Website:</strong> <a href="${data.company_website}" target="_blank" class="text-blue-600 underline">Visit Site</a></p>` : ""}
-  `;
+  title.textContent = clean(data.company_name) || "Founder Details";
+
+  const fields = [
+    ["Founder", data.name],
+    ["Company", data.company_name],
+    ["Product", data.product],
+    ["Location", data.location],
+    ["Building Since", data.building_since],
+    ["Repeat Founder", data.repeat_founder],
+    ["Business Stage", data.business_stage],
+    ["Verticals", data.verticals],
+    ["Market", data.market],
+    ["Funding", data.funding],
+    ["Source", data.source],
+    ["Technical", data.technical],
+    ["School Tags", data.school_tags],
+    ["Industry Expertise Score", data.industry_expertise_score],
+    ["Past Success Indication Score", data.past_success_indication_score],
+    ["Company Tech Score", data.company_tech_score],
+    ["Tree Path", data.tree_path],
+    ["Tree Thesis", data.tree_thesis],
+    ["Tree Justification", data.tree_justification],
+    ["Tags", data.company_tags],
+    ["Headcount", data.headcount],
+  ];
+
+  let html = `<div class="space-y-2 text-sm text-gray-700">`;
+
+  // Add only non-empty fields
+  for (const [label, value] of fields) {
+    const cleaned = clean(value);
+    if (cleaned) html += `<p><strong>${label}:</strong> ${cleaned}</p>`;
+  }
+
+  // Optional sections
+  if (data.embeddednews && clean(data.embeddednews))
+    html += `<div><strong>Embedded News:</strong><div class="mt-1">${data.embeddednews}</div></div>`;
+
+  if (data.profile_url)
+    html += `<p><strong>LinkedIn:</strong> <a href="${data.profile_url}" target="_blank" class="text-blue-600 underline">View Profile</a></p>`;
+
+  if (data.company_website)
+    html += `<p><strong>Website:</strong> <a href="${data.company_website}" target="_blank" class="text-blue-600 underline">Visit Site</a></p>`;
+
+  if (data.twitter)
+    html += `<p><strong>Twitter:</strong> <a href="${data.twitter}" target="_blank" class="text-blue-600 underline">${data.twitter}</a></p>`;
+
+  html += `</div>`;
+  body.innerHTML = html;
 
   panel.classList.remove("hidden");
 }
+
 function toggleSearchPanel() {
   const panel = $("searchPanel");
   panel.classList.toggle("hidden");
