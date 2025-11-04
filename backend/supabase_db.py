@@ -344,3 +344,19 @@ def get_deals_funding_rounds() -> List[str]:
     except Exception as e:
         print(f"Error retrieving funding rounds: {e}")
         return []
+
+
+def get_interesting_people() -> List[Dict]:
+    """
+    Retrieve all interesting people from Supabase
+    Returns list of person dictionaries ordered by created_at descending
+    """
+    if not supabase:
+        raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
+    
+    try:
+        result = supabase.table("interesting_people").select("*").order("created_at", desc=True).execute()
+        return result.data
+    except Exception as e:
+        print(f"Error retrieving interesting people: {e}")
+        return []

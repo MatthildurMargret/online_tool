@@ -17,7 +17,8 @@ from utils.storage import (
 from supabase_db import (
     get_early_deals,
     get_deals_categories,
-    get_deals_funding_rounds
+    get_deals_funding_rounds,
+    get_interesting_people
 )
 from utils.stock_price import get_price_with_cache
 from utils.formatting import clean_nans
@@ -363,6 +364,21 @@ def get_deals_filters():
                 "funding_rounds": funding_rounds
             }
         })
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------
+# INTERESTING PEOPLE ENDPOINTS
+# ---------------------------------------------------------------------
+
+@app.route("/api/interesting-people", methods=["GET"])
+def get_interesting_people_endpoint():
+    """Get all interesting people from the database"""
+    try:
+        people = get_interesting_people()
+        return jsonify({"success": True, "data": people})
     except Exception as e:
         print(traceback.format_exc())
         return jsonify({"success": False, "error": str(e)}), 500
