@@ -4,8 +4,9 @@ Handles all interactions with the Supabase database
 """
 
 import os
+import re
 from datetime import datetime
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Union
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
@@ -187,3 +188,159 @@ def update_valuation_metrics(ticker: str, valuation_metrics: Dict) -> bool:
     except Exception as e:
         print(f"Error updating valuation metrics for {ticker}: {e}")
         return False
+
+
+def get_early_deals(category: Optional[Union[str, List[str]]] = None, funding_round: Optional[Union[str, List[str]]] = None) -> List[Dict]:
+    """
+    Retrieve early deals from Supabase
+    Optional filters: category, funding_round (both case-insensitive, supports lists)
+    Returns list of deal dictionaries, with header rows filtered out
+    """
+    if not supabase:
+        raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
+    
+    try:
+        # Fetch all deals (we'll filter in Python for case-insensitive matching)
+        query = supabase.table("early_deals").select("*")
+        
+        # Order by date descending (most recent first)
+        result = query.order("Date", desc=True).execute()
+        deals = result.data
+        
+        # Filter out header rows (rows where Company field matches common header strings)
+        header_keywords = ["company", "company name", "name"]
+        filtered_deals = []
+        for deal in deals:
+            company = str(deal.get("Company", "")).strip().lower()
+            # Skip if company name matches header keywords
+            if company and company not in header_keywords:
+                # Additional check: skip if multiple fields match their column names (header row)
+                matches = sum(1 for key, value in deal.items() 
+                            if value and str(value).strip().lower() == str(key).strip().lower())
+                if matches < 2:  # If less than 2 fields match column names, it's likely a data row
+                    filtered_deals.append(deal)
+        
+        # Apply case-insensitive filters (support both single values and lists)
+        if category:
+            # Handle both list and single value
+            if isinstance(category, list):
+                category_lower_set = {c.lower().strip() for c in category if c}
+            else:
+                category_lower_set = {category.lower().strip()}
+            
+            if category_lower_set:
+                filtered_deals = [d for d in filtered_deals 
+                                if d.get("Category") and str(d.get("Category")).lower().strip() in category_lower_set]
+        
+        if funding_round:
+            # Handle both list and single value - normalize filter values
+            if isinstance(funding_round, list):
+                normalized_filters = {normalize_funding_round(fr) for fr in funding_round if fr}
+            else:
+                normalized_filters = {normalize_funding_round(funding_round)}
+            
+            if normalized_filters:
+                filtered_deals = [d for d in filtered_deals 
+                                if d.get("Funding Round") and normalize_funding_round(str(d.get("Funding Round"))) in normalized_filters]
+        
+        return filtered_deals
+    except Exception as e:
+        print(f"Error retrieving early deals: {e}")
+        return []
+
+
+def get_deals_categories() -> List[str]:
+    """
+    Get unique list of categories from early_deals table (case-insensitive deduplication)
+    Returns sorted list of category strings with original capitalization preserved
+    """
+    if not supabase:
+        raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
+    
+    try:
+        # Select all columns to avoid issues with column names containing spaces
+        result = supabase.table("early_deals").select("*").execute()
+        categories_raw = [row.get("Category") for row in result.data if row.get("Category")]
+        
+        # Filter out header rows (skip if category matches "Category" or similar)
+        categories_raw = [c for c in categories_raw 
+                         if str(c).strip().lower() not in ["category", "categories", ""]]
+        
+        # Case-insensitive deduplication: keep first occurrence of each unique lowercase value
+        seen_lower = set()
+        unique_categories = []
+        for cat in categories_raw:
+            cat_str = str(cat).strip()
+            cat_lower = cat_str.lower()
+            if cat_lower not in seen_lower and cat_str:
+                seen_lower.add(cat_lower)
+                unique_categories.append(cat_str)
+        
+        return sorted(unique_categories)
+    except Exception as e:
+        print(f"Error retrieving deal categories: {e}")
+        return []
+
+
+def normalize_funding_round(round_str: str) -> str:
+    """
+    Normalize funding round strings to combine variations of 'unknown'/'unspecified'
+    Examples: 'Not specified', 'Unknown', 'unspecified', 'not specified (some text)', 
+              'Series Unknown', 'Series Unspecified' -> 'Unknown/Unspecified'
+    """
+    if not round_str:
+        return ""
+    
+    # Remove parentheses and their contents, then strip
+    cleaned = re.sub(r'\([^)]*\)', '', str(round_str)).strip()
+    cleaned_lower = cleaned.lower()
+    
+    # Check if it's a variant of unknown/unspecified
+    unknown_variants = [
+        "unknown", "unspecified", "not specified", 
+        "series unknown", "series unspecified"
+    ]
+    
+    for variant in unknown_variants:
+        if variant in cleaned_lower:
+            return "Unknown/Unspecified"
+    
+    # Return the cleaned original if not a variant
+    return cleaned
+
+
+def get_deals_funding_rounds() -> List[str]:
+    """
+    Get unique list of funding rounds from early_deals table (case-insensitive deduplication)
+    Combines variations of 'unknown'/'unspecified' into a single option
+    Returns sorted list of funding round strings
+    """
+    if not supabase:
+        raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
+    
+    try:
+        # Select all columns to avoid issues with column names containing spaces
+        result = supabase.table("early_deals").select("*").execute()
+        rounds_raw = [row.get("Funding Round") for row in result.data if row.get("Funding Round")]
+        
+        # Filter out header rows (skip if funding round matches "Funding Round" or similar)
+        header_keywords = ["funding round", "funding rounds", "round", "rounds", ""]
+        rounds_raw = [r for r in rounds_raw 
+                     if str(r).strip().lower() not in header_keywords]
+        
+        # Normalize and deduplicate
+        normalized_map = {}  # maps normalized -> original (first occurrence)
+        for round_val in rounds_raw:
+            round_str = str(round_val).strip()
+            if not round_str:
+                continue
+            
+            normalized = normalize_funding_round(round_str)
+            if normalized and normalized not in normalized_map:
+                normalized_map[normalized] = round_str
+        
+        # Return sorted list of normalized values
+        return sorted(normalized_map.keys())
+    except Exception as e:
+        print(f"Error retrieving funding rounds: {e}")
+        return []

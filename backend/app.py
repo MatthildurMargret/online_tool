@@ -14,6 +14,11 @@ from utils.db_init import init_db
 from utils.storage import (
     get_company_financials
 )
+from supabase_db import (
+    get_early_deals,
+    get_deals_categories,
+    get_deals_funding_rounds
+)
 from utils.stock_price import get_price_with_cache
 from utils.formatting import clean_nans
 
@@ -320,6 +325,47 @@ def industry_comparison_stream():
         mimetype="application/x-ndjson",
         headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
+
+
+# ---------------------------------------------------------------------
+# EARLY DEALS ENDPOINTS
+# ---------------------------------------------------------------------
+
+@app.route("/api/deals", methods=["GET"])
+def get_deals():
+    """Get early deals with optional filtering by category and funding round (supports multiple values)"""
+    try:
+        # Get lists of categories and funding rounds (supports multiple selections)
+        categories = request.args.getlist("category")
+        funding_rounds = request.args.getlist("funding_round")
+        
+        # Convert empty lists to None for backward compatibility
+        category = categories if categories else None
+        funding_round = funding_rounds if funding_rounds else None
+        
+        deals = get_early_deals(category=category, funding_round=funding_round)
+        return jsonify({"success": True, "data": deals})
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/deals/filters", methods=["GET"])
+def get_deals_filters():
+    """Get available filter options for deals (categories and funding rounds)"""
+    try:
+        categories = get_deals_categories()
+        funding_rounds = get_deals_funding_rounds()
+        return jsonify({
+            "success": True,
+            "data": {
+                "categories": categories,
+                "funding_rounds": funding_rounds
+            }
+        })
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # ---------------------------------------------------------------------

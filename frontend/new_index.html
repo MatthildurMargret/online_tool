@@ -40,7 +40,7 @@
   <!-- Sidebar -->
   <aside class="w-64 text-white p-6 flex flex-col gap-3" style="background-color: #161F6D;">
     <div class="mb-6 pl-3 flex items-center">
-  <img src="montage_logo.png" alt="Monty Logo" class="h-12 object-contain">
+  <img src="montage_logo.png" alt="Monty Logo" class="h-12 object-contain cursor-pointer hover:opacity-80 transition-opacity" onclick="showModule('welcomeModule')">
 </div>
 
     <button id="btn-welcomeModule"
@@ -49,15 +49,20 @@
   Home
 </button>
 
-    <button id="btn-valuationModule"
-            class="sidebar-btn text-left py-2 px-3 rounded hover:bg-blue-800"
-            onclick="showModule('valuationModule')">
-      Public Market Data 
-    </button>
     <button id="btn-foundersModule"
             class="sidebar-btn text-left py-2 px-3 rounded hover:bg-blue-800"
             onclick="showModule('foundersModule')">
       Sourcing Recommendations
+    </button>
+    <button id="btn-dealsModule"
+            class="sidebar-btn text-left py-2 px-3 rounded hover:bg-blue-800"
+            onclick="showModule('dealsModule')">
+      Deals
+    </button>
+    <button id="btn-valuationModule"
+            class="sidebar-btn text-left py-2 px-3 rounded hover:bg-blue-800"
+            onclick="showModule('valuationModule')">
+      Public Market Data 
     </button>
   </aside>
 
@@ -68,8 +73,55 @@
   <div class="bg-white rounded-xl shadow-lg w-full max-w-3xl p-6 mx-auto text-center">
     <h2 class="text-2xl font-bold text-brand mb-4">Monty</h2>
     <p class="text-gray-600">
-      Use the sidebar to explore Monty’s Valuation Tool or Founder Recommendations.
+      Use the sidebar to explore Monty's sourcing recommendations, recently announced deals, or public market data.
     </p>
+  </div>
+
+  <!-- Dashboard Section -->
+  <div class="w-full max-w-7xl mx-auto">
+    
+    <!-- Dashboard Grid - Easy to add more modules -->
+    <div id="dashboardGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      
+      <!-- Recent Founder Recommendations Module -->
+      <div class="bg-white rounded-xl shadow-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xl font-semibold text-brand">Recent sourcing recommendations</h3>
+          <button onclick="showModule('foundersModule')" class="text-sm text-blue-600 hover:text-blue-800 font-medium">
+            View All →
+          </button>
+        </div>
+        
+        <div id="dashboardFoundersLoading" class="hidden text-center py-4">
+          <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <p class="text-sm text-gray-600 mt-2">Loading...</p>
+        </div>
+        
+        <div id="dashboardFoundersList" class="space-y-3">
+          <!-- Cards will be inserted here -->
+        </div>
+      </div>
+
+      <!-- Recent Pre-Seed Deals Module -->
+      <div class="bg-white rounded-xl shadow-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xl font-semibold text-brand">Recent pre-seed deals</h3>
+          <button onclick="showModule('dealsModule')" class="text-sm text-blue-600 hover:text-blue-800 font-medium">
+            View All →
+          </button>
+        </div>
+        
+        <div id="dashboardDealsLoading" class="hidden text-center py-4">
+          <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <p class="text-sm text-gray-600 mt-2">Loading...</p>
+        </div>
+        
+        <div id="dashboardDealsList" class="space-y-3">
+          <!-- Cards will be inserted here -->
+        </div>
+      </div>
+      
+    </div>
   </div>
 </div>
 
@@ -299,12 +351,90 @@
   </div>
 </div>
 
+    <!-- Deals Module -->
+    <div id="dealsModule" class="hidden">
+      <div class="bg-white rounded-xl shadow-lg w-full p-6 space-y-4">
+        <h2 class="text-2xl font-bold text-brand text-center mb-4">Early Deals</h2>
+
+        <!-- Filters -->
+        <div class="space-y-3">
+          <div class="flex gap-4">
+            <div class="flex-1">
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Filter by Category
+              </label>
+              <div class="relative">
+                <button type="button" 
+                        onclick="toggleMultiSelect('dealCategory')"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-left flex items-center justify-between">
+                  <span id="dealCategoryDisplay">All Categories</span>
+                  <span class="text-gray-400">▼</span>
+                </button>
+                <div id="dealCategoryDropdown" class="hidden absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  <div class="p-2">
+                    <label class="flex items-center p-2 hover:bg-gray-50 cursor-pointer rounded">
+                      <input type="checkbox" 
+                             class="mr-2" 
+                             onchange="toggleCategoryOption('all')"
+                             id="dealCategoryAll">
+                      <span>All Categories</span>
+                    </label>
+                    <div id="dealCategoryOptions" class="border-t border-gray-200 mt-1 pt-1">
+                      <!-- Options will be populated here -->
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="flex-1">
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Filter by Funding Round
+              </label>
+              <div class="relative">
+                <button type="button" 
+                        onclick="toggleMultiSelect('dealFundingRound')"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-left flex items-center justify-between">
+                  <span id="dealFundingRoundDisplay">All Funding Rounds</span>
+                  <span class="text-gray-400">▼</span>
+                </button>
+                <div id="dealFundingRoundDropdown" class="hidden absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  <div class="p-2">
+                    <label class="flex items-center p-2 hover:bg-gray-50 cursor-pointer rounded">
+                      <input type="checkbox" 
+                             class="mr-2" 
+                             onchange="toggleFundingRoundOption('all')"
+                             id="dealFundingRoundAll">
+                      <span>All Funding Rounds</span>
+                    </label>
+                    <div id="dealFundingRoundOptions" class="border-t border-gray-200 mt-1 pt-1">
+                      <!-- Options will be populated here -->
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loading indicator -->
+        <div id="dealsLoading" class="hidden text-center py-4">
+          <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <p class="text-sm text-gray-600 mt-2">Loading...</p>
+        </div>
+
+        <!-- Results -->
+        <div id="dealsResults" class="hidden overflow-y-auto max-h-[700px] border border-gray-200 rounded-lg p-3">
+          <div id="dealsScroll" class="flex flex-col gap-4"></div>
+        </div>
+      </div>
+    </div>
+
   </main>
 </body>
 
 <script>
 function showModule(id) {
-  ["welcomeModule", "valuationModule", "foundersModule"].forEach(m =>
+  ["welcomeModule", "valuationModule", "foundersModule", "dealsModule"].forEach(m =>
     document.getElementById(m).classList.add("hidden")
   );
   document.getElementById(id).classList.remove("hidden");
@@ -316,6 +446,17 @@ function showModule(id) {
 
   if (id === "foundersModule") {
     loadFilters().then(() => showTab("recommended"));
+  }
+  
+  // Load dashboard when showing home page
+  if (id === "welcomeModule") {
+    loadDashboardRecommendations();
+    loadDashboardDeals();
+  }
+  
+  // Load deals when showing deals module
+  if (id === "dealsModule") {
+    loadDealsFilters().then(() => loadDeals());
   }
 }
 
@@ -540,6 +681,9 @@ function showModule(id) {
   // Load map on page load
   document.addEventListener("DOMContentLoaded", () => {
     loadIndustryMap();
+    // Load dashboard on initial page load
+    loadDashboardRecommendations();
+    loadDashboardDeals();
   });
 
   async function loadIndustryMap() {
@@ -1004,29 +1148,9 @@ async function searchFounders() {
 
     const scroll = $("searchScroll");
     for (const row of data.slice(0, 50)) {
-      const company = row.company_name || "Unknown";
-      const treePath = row.tree_path || "—";
-      const tags = (row.company_tags || "")
-        .split(",")
-        .map(t => t.trim())
-        .filter(t => t && t.toLowerCase() !== "none");
-
       const card = document.createElement("div");
-      card.className =
-        "min-w-[250px] bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer flex flex-col justify-between";
-      card.innerHTML = `
-        <div>
-          <h3 class="font-semibold text-brand text-lg truncate">${company}</h3>
-          <p class="text-xs text-gray-500 mt-1">${treePath}</p>
-        </div>
-        ${
-          tags.length
-            ? `<div class="flex flex-wrap gap-1 mt-3">
-                ${tags.map(t => `<span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">${t}</span>`).join("")}
-              </div>`
-            : ""
-        }
-      `;
+      card.className = "bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer transition-shadow";
+      card.innerHTML = createFounderCardHTML(row);
       card.addEventListener("click", () => openFounderModal(row));
       scroll.appendChild(card);
     }
@@ -1267,6 +1391,69 @@ function getSelectedTreePath() {
   return parts.join(" > ");
 }
 
+// Helper function to create founder card HTML
+function createFounderCardHTML(row) {
+  const company = row.company_name || "Unknown";
+  const founder = row.name || "";
+  const treePath = row.tree_path || "—";
+  const location = row.location || "";
+  const funding = row.funding || "";
+  const businessStage = row.business_stage || "";
+  const repeatFounder = row.repeat_founder === true || row.repeat_founder === "true" || String(row.repeat_founder).toLowerCase() === "true";
+  const technical = row.technical === true || row.technical === "true" || String(row.technical).toLowerCase() === "true";
+  
+  const tags = (row.company_tags || "")
+    .split(",")
+    .map(t => t.trim())
+    .filter(t => t && t.toLowerCase() !== "none");
+  
+  const verticals = (row.verticals || "")
+    .split(",")
+    .map(v => v.trim())
+    .filter(v => v && v.toLowerCase() !== "none")
+    .map(v => v.replace(/\s*\([^)]*\)\s*/g, '').trim())
+    .filter(v => v);
+
+  return `
+    <div class="space-y-2">
+      <div>
+        <h3 class="font-semibold text-brand text-lg">${company}</h3>
+        ${founder ? `<p class="text-xs text-gray-600 mt-0.5">${founder}</p>` : ""}
+        <p class="text-xs text-gray-500 mt-1">${treePath}</p>
+      </div>
+      
+      ${location || funding || businessStage ? `
+        <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+          ${location ? `<span>📍 ${location}</span>` : ""}
+          ${businessStage ? `<span>🏢 ${businessStage}</span>` : ""}
+          ${funding ? `<span>💰 ${funding}</span>` : ""}
+        </div>
+      ` : ""}
+      
+      ${repeatFounder || technical ? `
+        <div class="flex flex-wrap gap-1">
+          ${repeatFounder ? `<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Repeat Founder</span>` : ""}
+          ${technical ? `<span class="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Technical</span>` : ""}
+        </div>
+      ` : ""}
+      
+      ${verticals.length > 0 ? `
+        <div class="flex flex-wrap gap-1">
+          ${verticals.slice(0, 2).map(v => `<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">${v}</span>`).join("")}
+          ${verticals.length > 2 ? `<span class="text-xs text-gray-500">+${verticals.length - 2} more</span>` : ""}
+        </div>
+      ` : ""}
+      
+      ${tags.length > 0 ? `
+        <div class="flex flex-wrap gap-1">
+          ${tags.slice(0, 2).map(t => `<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">${t}</span>`).join("")}
+          ${tags.length > 2 ? `<span class="text-xs text-gray-500">+${tags.length - 2} more</span>` : ""}
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
 async function loadRecommendedFiltered() {
   const treePath = getSelectedTreePath();
 
@@ -1292,27 +1479,9 @@ async function loadRecommendedFiltered() {
 
     const scroll = $("recommendedScroll");
     for (const row of data.slice(0, 50)) {
-      const company = row.company_name || "Unknown";
-      const treePath = row.tree_path || "—";
-      const tags = (row.company_tags || "")
-        .split(",")
-        .map(t => t.trim())
-        .filter(t => t && t.toLowerCase() !== "none");
-
       const card = document.createElement("div");
-      card.className =
-        "min-w-[250px] bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer flex flex-col justify-between";
-      card.innerHTML = `
-        <div>
-          <h3 class="font-semibold text-brand text-lg truncate">${company}</h3>
-          <p class="text-xs text-gray-500 mt-1">${treePath}</p>
-        </div>
-        ${tags.length
-          ? `<div class="flex flex-wrap gap-1 mt-3">
-              ${tags.map(t => `<span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">${t}</span>`).join("")}
-            </div>`
-          : ""}
-      `;
+      card.className = "bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer transition-shadow";
+      card.innerHTML = createFounderCardHTML(row);
       card.addEventListener("click", () => openFounderModal(row));
       scroll.appendChild(card);
     }
@@ -1323,6 +1492,138 @@ async function loadRecommendedFiltered() {
     $("foundersLoading").classList.add("hidden");
     $("recommendedScroll").innerHTML = `<p class="text-red-500 px-4">Error loading data.</p>`;
   }
+}
+
+// Load dashboard recommendations (top 5)
+async function loadDashboardRecommendations() {
+  const loadingEl = $("dashboardFoundersLoading");
+  const listEl = $("dashboardFoundersList");
+  
+  if (!loadingEl || !listEl) return; // Dashboard not visible
+  
+  loadingEl.classList.remove("hidden");
+  listEl.innerHTML = "";
+
+  try {
+    const res = await fetch(`${FOUNDERS_API}/recommended-founders`, {
+      headers: { "x-api-key": API_KEY }
+    });
+    const json = await res.json();
+    const data = json.data || [];
+
+    loadingEl.classList.add("hidden");
+
+    if (!data.length) {
+      listEl.innerHTML = `<p class="text-gray-500 text-sm text-center py-4">No recommendations available.</p>`;
+      return;
+    }
+
+    // Show only top 5
+    const top5 = data.slice(0, 5);
+    
+    top5.forEach((row, index) => {
+      const card = document.createElement("div");
+      card.className = "bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer transition-shadow";
+      card.innerHTML = createFounderCardHTML(row);
+      card.addEventListener("click", () => {
+        showModule('foundersModule');
+        // Small delay to ensure module is visible before opening modal
+        setTimeout(() => openFounderModal(row), 100);
+      });
+      listEl.appendChild(card);
+    });
+
+  } catch (err) {
+    console.error("Failed to load dashboard recommendations", err);
+    loadingEl.classList.add("hidden");
+    listEl.innerHTML = `<p class="text-red-500 text-sm text-center py-4">Error loading recommendations.</p>`;
+  }
+}
+
+// Load dashboard pre-seed deals (top 5)
+async function loadDashboardDeals() {
+  const loadingEl = $("dashboardDealsLoading");
+  const listEl = $("dashboardDealsList");
+  
+  if (!loadingEl || !listEl) return; // Dashboard not visible
+  
+  loadingEl.classList.remove("hidden");
+  listEl.innerHTML = "";
+
+  try {
+    const res = await fetch(`${API_URL}/api/deals`);
+    const json = await res.json();
+    
+    if (!json.success) {
+      throw new Error(json.error || "Failed to load deals");
+    }
+    
+    const allDeals = json.data || [];
+    
+    // Filter for pre-seed deals (case-insensitive)
+    const preSeedDeals = allDeals.filter(deal => {
+      const fundingRound = (deal["Funding Round"] || "").toLowerCase();
+      return fundingRound.includes("pre-seed") || fundingRound.includes("pre seed");
+    });
+    
+    loadingEl.classList.add("hidden");
+
+    if (!preSeedDeals.length) {
+      listEl.innerHTML = `<p class="text-gray-500 text-sm text-center py-4">No pre-seed deals available.</p>`;
+      return;
+    }
+
+    // Show only top 5 most recent
+    const top5 = preSeedDeals.slice(0, 5);
+    
+    top5.forEach((deal) => {
+      const card = document.createElement("div");
+      card.className = "bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow";
+      card.innerHTML = createDashboardDealCardHTML(deal);
+      listEl.appendChild(card);
+    });
+
+  } catch (err) {
+    console.error("Failed to load dashboard deals", err);
+    loadingEl.classList.add("hidden");
+    listEl.innerHTML = `<p class="text-red-500 text-sm text-center py-4">Error loading deals.</p>`;
+  }
+}
+
+// Helper function to create compact deal card HTML for dashboard
+function createDashboardDealCardHTML(deal) {
+  const company = deal.Company || "Unknown";
+  const amount = deal.Amount || "";
+  const investors = formatInvestors(deal.Investors);
+  const date = deal.Date || "";
+  const category = deal.Category || "";
+
+  return `
+    <div class="space-y-2">
+      <div>
+        <h3 class="font-semibold text-brand text-base">${company}</h3>
+        ${date ? `<p class="text-xs text-gray-500 mt-0.5">${date}</p>` : ""}
+      </div>
+      
+      ${amount ? `
+        <div class="text-xs text-gray-600">
+          <span class="font-semibold text-green-600">💰 ${amount}</span>
+        </div>
+      ` : ""}
+      
+      ${investors ? `
+        <div class="text-xs text-gray-600">
+          <span class="font-medium">Investors:</span> ${investors}
+        </div>
+      ` : ""}
+      
+      ${category ? `
+        <div class="flex flex-wrap gap-1">
+          <span class="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">${category}</span>
+        </div>
+      ` : ""}
+    </div>
+  `;
 }
 
 function showTab(tab) {
@@ -1356,6 +1657,349 @@ function showTab(tab) {
     const hasResults = $("searchScroll").children.length > 0;
     $("searchResults").classList.toggle("hidden", !hasResults);
   }
+}
+
+// Multi-select state
+let selectedCategories = new Set();
+let selectedFundingRounds = new Set();
+
+// Toggle multi-select dropdown
+function toggleMultiSelect(type) {
+  const dropdown = $(type + "Dropdown");
+  if (dropdown) {
+    dropdown.classList.toggle("hidden");
+    // Close other dropdowns
+    if (type === "dealCategory") {
+      $("dealFundingRoundDropdown")?.classList.add("hidden");
+    } else {
+      $("dealCategoryDropdown")?.classList.add("hidden");
+    }
+  }
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener("click", (e) => {
+  const categoryDropdown = $("dealCategoryDropdown");
+  const fundingDropdown = $("dealFundingRoundDropdown");
+  
+  // Check if click is outside category dropdown and its button
+  if (categoryDropdown && !categoryDropdown.contains(e.target) && 
+      !e.target.closest("button[onclick*='dealCategory']")) {
+    categoryDropdown.classList.add("hidden");
+  }
+  
+  // Check if click is outside funding round dropdown and its button
+  if (fundingDropdown && !fundingDropdown.contains(e.target) && 
+      !e.target.closest("button[onclick*='dealFundingRound']")) {
+    fundingDropdown.classList.add("hidden");
+  }
+});
+
+// Toggle category option
+function toggleCategoryOption(value) {
+  if (value === "all") {
+    const allChecked = $("dealCategoryAll").checked;
+    selectedCategories.clear();
+    if (allChecked) {
+      // Select all categories
+      document.querySelectorAll("#dealCategoryOptions input[type='checkbox']").forEach(cb => {
+        if (cb.id !== "dealCategoryAll") {
+          cb.checked = true;
+          selectedCategories.add(cb.value);
+        }
+      });
+    } else {
+      // Unselect all
+      document.querySelectorAll("#dealCategoryOptions input[type='checkbox']").forEach(cb => {
+        cb.checked = false;
+      });
+    }
+  } else {
+    const checkboxId = `dealCategory_${value.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    const checkbox = document.getElementById(checkboxId);
+    if (checkbox) {
+      if (checkbox.checked) {
+        selectedCategories.add(value);
+        // Uncheck "All" if a specific option is selected
+        $("dealCategoryAll").checked = false;
+      } else {
+        selectedCategories.delete(value);
+      }
+    }
+  }
+  updateCategoryDisplay();
+  loadDeals();
+}
+
+// Toggle funding round option
+function toggleFundingRoundOption(value) {
+  if (value === "all") {
+    const allChecked = $("dealFundingRoundAll").checked;
+    selectedFundingRounds.clear();
+    if (allChecked) {
+      // Select all funding rounds
+      document.querySelectorAll("#dealFundingRoundOptions input[type='checkbox']").forEach(cb => {
+        if (cb.id !== "dealFundingRoundAll") {
+          cb.checked = true;
+          selectedFundingRounds.add(cb.value);
+        }
+      });
+    } else {
+      // Unselect all
+      document.querySelectorAll("#dealFundingRoundOptions input[type='checkbox']").forEach(cb => {
+        cb.checked = false;
+      });
+    }
+  } else {
+    const checkboxId = `dealFundingRound_${value.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    const checkbox = document.getElementById(checkboxId);
+    if (checkbox) {
+      if (checkbox.checked) {
+        selectedFundingRounds.add(value);
+        // Uncheck "All" if a specific option is selected
+        $("dealFundingRoundAll").checked = false;
+      } else {
+        selectedFundingRounds.delete(value);
+      }
+    }
+  }
+  updateFundingRoundDisplay();
+  loadDeals();
+}
+
+// Update category display text
+function updateCategoryDisplay() {
+  const display = $("dealCategoryDisplay");
+  if (selectedCategories.size === 0) {
+    display.textContent = "All Categories";
+  } else if (selectedCategories.size === 1) {
+    display.textContent = Array.from(selectedCategories)[0];
+  } else {
+    display.textContent = `${selectedCategories.size} selected`;
+  }
+}
+
+// Update funding round display text
+function updateFundingRoundDisplay() {
+  const display = $("dealFundingRoundDisplay");
+  if (selectedFundingRounds.size === 0) {
+    display.textContent = "All Funding Rounds";
+  } else if (selectedFundingRounds.size === 1) {
+    display.textContent = Array.from(selectedFundingRounds)[0];
+  } else {
+    display.textContent = `${selectedFundingRounds.size} selected`;
+  }
+}
+
+// Load deals filters (categories and funding rounds)
+async function loadDealsFilters() {
+  try {
+    const res = await fetch(`${API_URL}/api/deals/filters`);
+    const json = await res.json();
+    if (!json.success) throw new Error("Failed to load filters");
+
+    const categories = json.data.categories || [];
+    const fundingRounds = json.data.funding_rounds || [];
+
+    // Populate category checkboxes
+    const categoryOptions = $("dealCategoryOptions");
+    if (categoryOptions) {
+      categoryOptions.innerHTML = "";
+      categories.forEach(cat => {
+        const label = document.createElement("label");
+        label.className = "flex items-center p-2 hover:bg-gray-50 cursor-pointer rounded";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "mr-2";
+        checkbox.value = cat;
+        checkbox.id = `dealCategory_${cat.replace(/[^a-zA-Z0-9]/g, "_")}`;
+        checkbox.onchange = () => toggleCategoryOption(cat);
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(cat));
+        categoryOptions.appendChild(label);
+      });
+    }
+
+    // Populate funding round checkboxes
+    const fundingOptions = $("dealFundingRoundOptions");
+    if (fundingOptions) {
+      fundingOptions.innerHTML = "";
+      fundingRounds.forEach(round => {
+        const label = document.createElement("label");
+        label.className = "flex items-center p-2 hover:bg-gray-50 cursor-pointer rounded";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "mr-2";
+        checkbox.value = round;
+        checkbox.id = `dealFundingRound_${round.replace(/[^a-zA-Z0-9]/g, "_")}`;
+        checkbox.onchange = () => toggleFundingRoundOption(round);
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(round));
+        fundingOptions.appendChild(label);
+      });
+    }
+  } catch (e) {
+    console.error("Failed to load deals filters", e);
+  }
+}
+
+// Load and display deals
+async function loadDeals() {
+  const loadingEl = $("dealsLoading");
+  const resultsEl = $("dealsResults");
+  const scrollEl = $("dealsScroll");
+
+  if (!loadingEl || !resultsEl || !scrollEl) return;
+
+  loadingEl.classList.remove("hidden");
+  resultsEl.classList.add("hidden");
+  scrollEl.innerHTML = "";
+
+  try {
+    const query = new URLSearchParams();
+    
+    // Add categories if any are selected
+    if (selectedCategories.size > 0) {
+      Array.from(selectedCategories).forEach(cat => {
+        query.append("category", cat);
+      });
+    }
+    
+    // Add funding rounds if any are selected
+    if (selectedFundingRounds.size > 0) {
+      Array.from(selectedFundingRounds).forEach(round => {
+        query.append("funding_round", round);
+      });
+    }
+
+    const res = await fetch(`${API_URL}/api/deals?${query.toString()}`);
+    const json = await res.json();
+
+    if (!json.success) {
+      throw new Error(json.error || "Failed to load deals");
+    }
+
+    const deals = json.data || [];
+    loadingEl.classList.add("hidden");
+
+    if (!deals.length) {
+      resultsEl.classList.remove("hidden");
+      scrollEl.innerHTML = `<p class="text-gray-500 px-4">No deals found.</p>`;
+      return;
+    }
+
+    // Display deals
+    deals.forEach(deal => {
+      const card = document.createElement("div");
+      card.className = "bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow";
+      card.innerHTML = createDealCardHTML(deal);
+      scrollEl.appendChild(card);
+    });
+
+    resultsEl.classList.remove("hidden");
+  } catch (err) {
+    console.error("Failed to load deals", err);
+    loadingEl.classList.add("hidden");
+    resultsEl.classList.remove("hidden");
+    scrollEl.innerHTML = `<p class="text-red-500 px-4">Error loading deals: ${err.message}</p>`;
+  }
+}
+
+// Helper function to format investors string
+function formatInvestors(investors) {
+  if (!investors) return "";
+  
+  // If it's already an array, use it directly
+  if (Array.isArray(investors)) {
+    return investors.filter(Boolean).join(", ");
+  }
+  
+  // Convert to string
+  const investorsStr = String(investors).trim();
+  if (!investorsStr) return "";
+  
+  // Try to parse as JSON array first
+  try {
+    const parsed = JSON.parse(investorsStr);
+    if (Array.isArray(parsed)) {
+      return parsed.filter(Boolean).join(", ");
+    }
+  } catch (e) {
+    // Not valid JSON, continue with other parsing
+  }
+  
+  // Check if it looks like a Python list string representation (e.g., "['Name1', 'Name2']")
+  const listMatch = investorsStr.match(/^\[(.*)\]$/);
+  if (listMatch) {
+    const content = listMatch[1];
+    // Extract quoted strings
+    const items = content.match(/'([^']+)'/g) || content.match(/"([^"]+)"/g);
+    if (items) {
+      return items.map(item => item.slice(1, -1)).filter(Boolean).join(", ");
+    }
+    // If no quotes, try splitting by comma
+    return content.split(',').map(item => item.trim()).filter(Boolean).join(", ");
+  }
+  
+  // If it's a comma-separated string, return it as is (already formatted)
+  // But clean up any extra whitespace
+  return investorsStr.split(',').map(item => item.trim()).filter(Boolean).join(", ");
+}
+
+// Helper function to create deal card HTML
+function createDealCardHTML(deal) {
+  const company = deal.Company || "Unknown";
+  const amount = deal.Amount || "";
+  const fundingRound = deal["Funding Round"] || "";
+  const vertical = deal.Vertical || "";
+  const link = deal.Link || "";
+  const investors = formatInvestors(deal.Investors);
+  const category = deal.Category || "";
+  const source = deal.Source || "";
+  const date = deal.Date || "";
+
+  return `
+    <div class="space-y-2">
+      <div>
+        <h3 class="font-semibold text-brand text-lg">${company}</h3>
+        ${date ? `<p class="text-xs text-gray-500 mt-1">${date}</p>` : ""}
+      </div>
+      
+      ${amount || fundingRound ? `
+        <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+          ${amount ? `<span class="font-semibold text-green-600">💰 ${amount}</span>` : ""}
+          ${fundingRound ? `<span>📊 ${fundingRound}</span>` : ""}
+        </div>
+      ` : ""}
+      
+      ${category || vertical ? `
+        <div class="flex flex-wrap gap-1">
+          ${category ? `<span class="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">${category}</span>` : ""}
+          ${vertical ? `<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">${vertical}</span>` : ""}
+        </div>
+      ` : ""}
+      
+      ${investors ? `
+        <div class="text-xs text-gray-600">
+          <span class="font-medium">Investors:</span> ${investors}
+        </div>
+      ` : ""}
+      
+      ${source ? `
+        <div class="text-xs text-gray-500">
+          <span class="font-medium">Source:</span> ${source}
+        </div>
+      ` : ""}
+      
+      ${link ? `
+        <div class="pt-2">
+          <a href="${link}" target="_blank" class="text-xs text-blue-600 hover:text-blue-800 underline">
+            View Deal →
+          </a>
+        </div>
+      ` : ""}
+    </div>
+  `;
 }
 
 </script>
