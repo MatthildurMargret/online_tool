@@ -66,7 +66,7 @@
     <!-- Welcome page (default) -->
 <div id="welcomeModule" class="space-y-10">
   <div class="bg-white rounded-xl shadow-lg w-full max-w-3xl p-6 mx-auto text-center">
-    <h2 class="text-2xl font-bold text-brand mb-4">Welcome to Monty</h2>
+    <h2 class="text-2xl font-bold text-brand mb-4">Monty</h2>
     <p class="text-gray-600">
       Use the sidebar to explore Monty’s Valuation Tool or Founder Recommendations.
     </p>
@@ -192,14 +192,14 @@
   </label>
 
   <select id="treeLevel1"
-          onchange="updateTreeLevel2()"
+          onchange="updateTreeLevel2(); loadRecommendedFiltered();"
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
     <option value="">All</option>
   </select>
 
 <div id="treeLevel2Container" class="hidden">
   <select id="treeLevel2"
-          onchange="updateTreeLevel3()"
+          onchange="updateTreeLevel3(); loadRecommendedFiltered();"
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
     <option value="">All</option>
   </select>
@@ -208,6 +208,7 @@
 
 <div id="treeLevel3Container" class="hidden">
   <select id="treeLevel3"
+          onchange="loadRecommendedFiltered();"
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
     <option value="">All</option>
   </select>
@@ -830,31 +831,47 @@ function openFounderModal(data) {
 
   title.textContent = clean(data.company_name) || "Founder Details";
 
+  // Build tags section
+  const tags = [];
+  
+  // Repeat Founder tag (only if true)
+  if (data.repeat_founder === true || data.repeat_founder === "true" || String(data.repeat_founder).toLowerCase() === "true") {
+    tags.push('<span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Repeat Founder</span>');
+  }
+  
+  // Technical tag (only if true)
+  if (data.technical === true || data.technical === "true" || String(data.technical).toLowerCase() === "true") {
+    tags.push('<span class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">Technical</span>');
+  }
+  
+  // Tree Thesis tag (only if it exists and is not "No specific thesis on this space")
+  const treeThesis = clean(data.tree_thesis);
+  if (treeThesis && treeThesis.toLowerCase() !== "no specific thesis on this space") {
+    tags.push(`<span class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">${treeThesis}</span>`);
+  }
+
+  let html = `<div class="space-y-3 text-sm text-gray-700">`;
+
+  // Tags section at the top
+  if (tags.length > 0) {
+    html += `<div class="flex flex-wrap gap-2 mb-4 pb-3 border-b border-gray-200">${tags.join("")}</div>`;
+  }
+
+  // Main fields (excluding those we're handling differently)
   const fields = [
     ["Founder", data.name],
     ["Company", data.company_name],
     ["Product", data.product],
     ["Location", data.location],
     ["Building Since", data.building_since],
-    ["Repeat Founder", data.repeat_founder],
     ["Business Stage", data.business_stage],
-    ["Verticals", data.verticals],
     ["Market", data.market],
     ["Funding", data.funding],
     ["Source", data.source],
-    ["Technical", data.technical],
-    ["School Tags", data.school_tags],
     ["Industry Expertise Score", data.industry_expertise_score],
     ["Past Success Indication Score", data.past_success_indication_score],
     ["Company Tech Score", data.company_tech_score],
-    ["Tree Path", data.tree_path],
-    ["Tree Thesis", data.tree_thesis],
-    ["Tree Justification", data.tree_justification],
-    ["Tags", data.company_tags],
-    ["Headcount", data.headcount],
   ];
-
-  let html = `<div class="space-y-2 text-sm text-gray-700">`;
 
   // Add only non-empty fields
   for (const [label, value] of fields) {
@@ -862,18 +879,84 @@ function openFounderModal(data) {
     if (cleaned) html += `<p><strong>${label}:</strong> ${cleaned}</p>`;
   }
 
+  // Helper function to parse and display tags
+  function parseTags(value) {
+    if (!value) return [];
+    if (Array.isArray(value)) return value.filter(Boolean);
+    if (typeof value === 'string') {
+      return value.split(',').map(t => t.trim()).filter(t => t && t.toLowerCase() !== 'none');
+    }
+    return [];
+  }
+
+  // Verticals section
+  const verticals = parseTags(data.verticals);
+  if (verticals.length > 0) {
+    html += `<div class="mt-3"><strong class="text-gray-700">Verticals:</strong><div class="flex flex-wrap gap-2 mt-2">`;
+    verticals.forEach(v => {
+      // Remove parentheses and their contents (e.g., "Retail Technology (high)" -> "Retail Technology")
+      const cleaned = v.replace(/\s*\([^)]*\)\s*/g, '').trim();
+      html += `<span class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full">${cleaned}</span>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // School Tags section
+  const schoolTags = parseTags(data.school_tags);
+  if (schoolTags.length > 0) {
+    html += `<div class="mt-3"><strong class="text-gray-700">School Tags:</strong><div class="flex flex-wrap gap-2 mt-2">`;
+    schoolTags.forEach(tag => {
+      html += `<span class="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full">${tag}</span>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // Company Tags section
+  const companyTags = parseTags(data.company_tags);
+  if (companyTags.length > 0) {
+    html += `<div class="mt-3"><strong class="text-gray-700">Tags:</strong><div class="flex flex-wrap gap-2 mt-2">`;
+    companyTags.forEach(tag => {
+      html += `<span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">${tag}</span>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // Headcount (only if not 0)
+  const headcount = data.headcount;
+  if (headcount && headcount !== 0 && headcount !== "0") {
+    html += `<p><strong>Headcount:</strong> ${headcount}</p>`;
+  }
+
   // Optional sections
-  if (data.embeddednews && clean(data.embeddednews))
-    html += `<div><strong>Embedded News:</strong><div class="mt-1">${data.embeddednews}</div></div>`;
+  // Embedded News (only if not empty)
+  const embeddedNews = data.embeddednews;
+  if (embeddedNews && clean(embeddedNews)) {
+    // Check if it's an array or string
+    let newsContent = embeddedNews;
+    if (Array.isArray(embeddedNews)) {
+      if (embeddedNews.length > 0) {
+        newsContent = embeddedNews.join(", ");
+        html += `<div class="mt-2"><strong>Embedded News:</strong><div class="mt-1 text-gray-600">${newsContent}</div></div>`;
+      }
+    } else {
+      html += `<div class="mt-2"><strong>Embedded News:</strong><div class="mt-1 text-gray-600">${newsContent}</div></div>`;
+    }
+  }
 
+  // Links section
+  const links = [];
   if (data.profile_url)
-    html += `<p><strong>LinkedIn:</strong> <a href="${data.profile_url}" target="_blank" class="text-blue-600 underline">View Profile</a></p>`;
-
+    links.push(`<a href="${data.profile_url}" target="_blank" class="text-blue-600 underline hover:text-blue-800">LinkedIn Profile</a>`);
+  
   if (data.company_website)
-    html += `<p><strong>Website:</strong> <a href="${data.company_website}" target="_blank" class="text-blue-600 underline">Visit Site</a></p>`;
-
+    links.push(`<a href="${data.company_website}" target="_blank" class="text-blue-600 underline hover:text-blue-800">Company Website</a>`);
+  
   if (data.twitter)
-    html += `<p><strong>Twitter:</strong> <a href="${data.twitter}" target="_blank" class="text-blue-600 underline">${data.twitter}</a></p>`;
+    links.push(`<a href="${data.twitter}" target="_blank" class="text-blue-600 underline hover:text-blue-800">Twitter</a>`);
+
+  if (links.length > 0) {
+    html += `<div class="mt-4 pt-3 border-t border-gray-200 flex flex-wrap gap-3">${links.join("")}</div>`;
+  }
 
   html += `</div>`;
   body.innerHTML = html;
