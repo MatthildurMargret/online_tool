@@ -34,6 +34,65 @@
       color: #161f6d;
     }
 
+    .hero-title {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      letter-spacing: 0.02em;
+      font-weight: 400;
+    }
+
+    .hero-title-line1 {
+      font-size: 1.75rem;
+      font-weight: 400;
+      font-style: normal;
+      opacity: 0.8;
+    }
+
+    .hero-title-line2 {
+      font-size: 2.5rem;
+      font-weight: 500;
+      font-style: normal;
+      line-height: 1.3;
+    }
+
+    /* Sidebar styling */
+    .sidebar-btn {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      font-weight: 300;
+      font-size: 0.95rem;
+      letter-spacing: 0.02em;
+      transition: all 0.2s ease;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .sidebar-btn:hover {
+      color: rgba(255, 255, 255, 1);
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .sidebar-btn.bg-blue-700 {
+      background-color: rgba(255, 255, 255, 0.15);
+      color: rgba(255, 255, 255, 1);
+      font-weight: 400;
+    }
+
+    /* Module card styling */
+    .module-card {
+      background: linear-gradient(to bottom, #ffffff, #fafbfc);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+      transition: all 0.3s ease;
+    }
+
+    .module-card:hover {
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+      transform: translateY(-2px);
+    }
+
+    .module-title {
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
     </style>
 </head>
 <body class="min-h-screen flex" style="background: linear-gradient(to bottom right, #F9FAFF, #E3F1FF, #E3F1FF);">
@@ -44,30 +103,30 @@
 </div>
 
     <button id="btn-welcomeModule"
-        class="sidebar-btn text-left py-2 px-3 rounded hover:bg-blue-800"
+        class="sidebar-btn text-left py-3 px-4 rounded"
         onclick="showModule('welcomeModule')">
   Home
 </button>
 
     <button id="btn-foundersModule"
-            class="sidebar-btn text-left py-2 px-3 rounded hover:bg-blue-800"
+            class="sidebar-btn text-left py-3 px-4 rounded"
             onclick="showModule('foundersModule')">
-      Sourcing Recommendations
+      Monty's Sourcing
     </button>
     <button id="btn-dealsModule"
-            class="sidebar-btn text-left py-2 px-3 rounded hover:bg-blue-800"
+            class="sidebar-btn text-left py-3 px-4 rounded"
             onclick="showModule('dealsModule')">
       Deals
     </button>
     <button id="btn-interestingPeopleModule"
-            class="sidebar-btn text-left py-2 px-3 rounded hover:bg-blue-800"
+            class="sidebar-btn text-left py-3 px-4 rounded"
             onclick="showModule('interestingPeopleModule')">
       Interesting People
     </button>
     <button id="btn-valuationModule"
-            class="sidebar-btn text-left py-2 px-3 rounded hover:bg-blue-800"
+            class="sidebar-btn text-left py-3 px-4 rounded"
             onclick="showModule('valuationModule')">
-      Public Market Data 
+      Public Markets
     </button>
   </aside>
 
@@ -75,13 +134,18 @@
   <main class="flex-1 p-8 overflow-y-auto">
     <!-- Welcome page (default) -->
 <div id="welcomeModule" class="space-y-10">
-  <div class="bg-white rounded-xl shadow-lg w-full max-w-3xl p-6 mx-auto text-center">
-    <h2 class="text-2xl font-bold text-brand mb-4">Monty</h2>
-    <p class="text-gray-600">
-      Use the sidebar to explore Monty's sourcing recommendations, recently announced deals, or public market data.
-    </p>
+  <!-- Hero Section -->
+  <div class="w-full flex items-center justify-start pl-8" style="min-height: 40vh;">
+    <div class="hero-title text-brand">
+      <div class="hero-title-line1">
+        Monty's  
+      </div>
+      <div class="hero-title-line2">
+        Data and Sourcing Results
+      </div>
+    </div>
   </div>
-
+  
   <!-- Dashboard Section -->
   <div class="w-full max-w-7xl mx-auto">
     
@@ -89,10 +153,10 @@
     <div id="dashboardGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       
       <!-- Recent Founder Recommendations Module -->
-      <div class="bg-white rounded-xl shadow-lg p-6">
+      <div class="module-card rounded-xl p-6">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-xl font-semibold text-brand">Recent sourcing recommendations</h3>
-          <button onclick="showModule('foundersModule')" class="text-sm text-blue-600 hover:text-blue-800 font-medium">
+          <h3 class="text-xl module-title text-brand">Recent sourcing recommendations</h3>
+          <button onclick="showModule('foundersModule')" class="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors">
             View All →
           </button>
         </div>
@@ -108,10 +172,10 @@
       </div>
 
       <!-- Recent Pre-Seed Deals Module -->
-      <div class="bg-white rounded-xl shadow-lg p-6">
+      <div class="module-card rounded-xl p-6">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-xl font-semibold text-brand">Recent pre-seed deals</h3>
-          <button onclick="showModule('dealsModule')" class="text-sm text-blue-600 hover:text-blue-800 font-medium">
+          <h3 class="text-xl module-title text-brand">Recent pre-seed deals</h3>
+          <button onclick="showModule('dealsModule')" class="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors">
             View All →
           </button>
         </div>
@@ -172,8 +236,6 @@
 
   <!-- Industry Comparison Section -->
   <div id="industryPicker" class="bg-white rounded-xl shadow-lg w-full max-w-3xl p-6 space-y-5 mx-auto">
-    <h2 class="text-2xl font-bold text-brand text-center mb-4">Industry Comparison</h2>
-
     <div>
       <label class="block text-sm font-medium text-gray-700 mb-2">Select Industry</label>
       <select id="industrySelect"
@@ -222,9 +284,7 @@
     </div>
     </div> <!-- end valuationModule -->
     <div id="foundersModule" class="hidden">
-  <div class="bg-white rounded-xl shadow-lg w-full p-6 space-y-4">
-    <h2 class="text-2xl font-bold text-brand text-center mb-4">Monty's Sourcing Recommendations</h2>
-
+  <div class="module-card rounded-xl w-full p-6 space-y-4">
 <!-- Tabs (always visible) -->
 <div class="flex justify-center border-b border-gray-300 mt-4">
   <button
@@ -358,9 +418,12 @@
 
     <!-- Interesting People Module -->
     <div id="interestingPeopleModule" class="hidden">
-      <div class="bg-white rounded-xl shadow-lg w-full p-6 space-y-4">
-        <h2 class="text-2xl font-bold text-brand text-center mb-4">Potential future founders</h2>
-
+      <div class="module-card rounded-xl w-full p-6 space-y-4">
+        <p class="text-gray-600 mt-8 mb-10 px-6 py-4">
+          This page displays potential future founders based on their profiles, skills, and recent activity. 
+          People are ranked by their potential interest as founders, with those who have recently been acquired, 
+          are building new ventures, or show strong entrepreneurial indicators appearing first.
+        </p>
         <!-- Two-column layout -->
         <div class="flex gap-6 mt-6">
           <!-- Left: scroll list -->
@@ -387,9 +450,12 @@
 
     <!-- Deals Module -->
     <div id="dealsModule" class="hidden">
-      <div class="bg-white rounded-xl shadow-lg w-full p-6 space-y-4">
-        <h2 class="text-2xl font-bold text-brand text-center mb-4">Early Deals</h2>
-
+      <div class="module-card rounded-xl w-full p-6 space-y-4">
+        <p class="text-gray-600 mt-8 mb-10 px-6 py-4">
+          Here we have a list of early stage deals, including pre-seed and seed funding rounds. 
+          Use the filters below to explore deals by category and funding round.
+          Currently they are sorted by recency.
+        </p>
         <!-- Filters -->
         <div class="space-y-3">
           <div class="flex gap-4">
