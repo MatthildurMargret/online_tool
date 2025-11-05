@@ -22,6 +22,7 @@ from supabase_db import (
 )
 from utils.stock_price import get_price_with_cache
 from utils.formatting import clean_nans
+from utils.prospecting import build_query, google_search
 
 # ---------------------------------------------------------------------
 # ENVIRONMENT SETUP
@@ -53,14 +54,6 @@ def health():
 @app.route("/", methods=["GET"])
 def index():
     return send_file(os.path.join(FRONTEND_DIR, "new_index.html"))
-
-
-@app.route("/<path:filename>", methods=["GET"])
-def serve_static(filename):
-    try:
-        return send_file(os.path.join(FRONTEND_DIR, filename))
-    except FileNotFoundError:
-        return "File not found", 404
 
 
 # ---------------------------------------------------------------------
@@ -382,6 +375,50 @@ def get_interesting_people_endpoint():
     except Exception as e:
         print(traceback.format_exc())
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------
+# PROSPECTING ENDPOINT
+# ---------------------------------------------------------------------
+
+@app.route("/api/prospecting/search", methods=["POST"])
+def search_prospects():
+    """Search for prospects using Google Custom Search"""
+    try:
+        payload = request.get_json(force=True)
+        keywords = payload.get("keywords", "").strip()
+        role = payload.get("role", "").strip()
+        company = payload.get("company", "").strip()
+        
+        # Build the query
+        query = build_query(keywords, role, company)
+        
+        # Perform the search
+        results = google_search(query)
+        
+        return jsonify({
+            "success": True,
+            "data": results,
+            "query": query
+        })
+    except ValueError as e:
+        # Missing API keys
+        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------
+# STATIC FILE SERVING (must be last to not interfere with API routes)
+# ---------------------------------------------------------------------
+
+@app.route("/<path:filename>", methods=["GET"])
+def serve_static(filename):
+    try:
+        return send_file(os.path.join(FRONTEND_DIR, filename))
+    except FileNotFoundError:
+        return "File not found", 404
 
 
 # ---------------------------------------------------------------------

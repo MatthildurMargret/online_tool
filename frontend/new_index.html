@@ -112,7 +112,7 @@
 
     .sidebar-container {
       position: relative;
-      height: 100vh;
+      height: 100%;
       display: flex;
       flex-direction: column;
       flex-shrink: 0;
@@ -193,7 +193,7 @@
 
     </style>
 </head>
-<body class="min-h-screen flex" style="background: linear-gradient(to bottom right, #F9FAFF, #E3F1FF, #E3F1FF);">
+<body class="h-screen flex overflow-hidden" style="background: linear-gradient(to bottom right, #F9FAFF, #E3F1FF, #E3F1FF);">
   <!-- Hamburger Menu Button (Mobile Only) -->
   <button id="hamburgerBtn" class="hamburger-btn" onclick="toggleSidebar()" aria-label="Toggle menu">
     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -236,6 +236,11 @@
             class="sidebar-btn text-left py-3 px-4 rounded"
             onclick="showModule('interestingPeopleModule')">
       Interesting People
+    </button>
+    <button id="btn-prospectingModule"
+            class="sidebar-btn text-left py-3 px-4 rounded"
+            onclick="showModule('prospectingModule')">
+      Prospecting
     </button>
     <button id="btn-valuationModule"
             class="sidebar-btn text-left py-3 px-4 rounded"
@@ -563,6 +568,85 @@
       </div>
     </div>
 
+    <!-- Prospecting Module -->
+    <div id="prospectingModule" class="hidden">
+      <div class="module-card rounded-xl w-full p-6 space-y-4">
+        <p class="text-gray-600 mt-8 mb-10 px-6 py-4">
+          Use this tool to search for prospects based on keywords, role, and company name. 
+          Enter your search criteria below and click search to find matching prospects.
+        </p>
+        
+        <!-- Search Form -->
+        <div class="space-y-4">
+          <div id="prospectingErrorBox" class="hidden bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3"></div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              Keywords <span class="text-gray-500 text-xs">(one keyword only)</span>
+            </label>
+            <input 
+              id="prospectingKeywords" 
+              type="text" 
+              placeholder="Enter one keyword (e.g. machine learning)"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              Role <span class="text-gray-500 text-xs">(one role only)</span>
+            </label>
+            <input 
+              id="prospectingRole" 
+              type="text" 
+              placeholder="Enter one role (e.g. CEO)"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              Company Name <span class="text-gray-500 text-xs">(one company only)</span>
+            </label>
+            <input 
+              id="prospectingCompany" 
+              type="text" 
+              placeholder="Enter one company name"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <button 
+            onclick="searchProspects()"
+            class="w-full mt-4 btn-primary text-white py-3 px-6 rounded-lg font-semibold">
+            Search
+          </button>
+        </div>
+
+        <!-- Loading indicator -->
+        <div id="prospectingLoading" class="hidden text-center py-4">
+          <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <p class="text-sm text-gray-600 mt-2">Searching...</p>
+        </div>
+
+        <!-- Results -->
+        <div id="prospectingResults" class="hidden mt-6">
+          <div class="mb-4 flex items-center justify-between">
+            <div id="prospectingResultsHeader" class="text-sm text-gray-600 font-medium"></div>
+            <button 
+              id="exportCsvBtn"
+              onclick="exportProspectingResultsToCSV()"
+              class="hidden px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+              Export to CSV
+            </button>
+          </div>
+          <div class="overflow-y-auto border border-gray-200 rounded-lg p-3" style="max-height: calc(100vh - 350px); min-height: 400px;">
+            <div id="prospectingScroll" class="flex flex-col gap-4"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Deals Module -->
     <div id="dealsModule" class="hidden">
       <div class="module-card rounded-xl w-full p-6 space-y-4">
@@ -673,7 +757,7 @@ function closeSidebarMobile() {
 }
 
 function showModule(id) {
-  ["welcomeModule", "valuationModule", "foundersModule", "dealsModule", "interestingPeopleModule"].forEach(m =>
+  ["welcomeModule", "valuationModule", "foundersModule", "dealsModule", "interestingPeopleModule", "prospectingModule"].forEach(m =>
     document.getElementById(m).classList.add("hidden")
   );
   document.getElementById(id).classList.remove("hidden");
@@ -2469,6 +2553,214 @@ function openPersonModal(person) {
   body.innerHTML = html;
 
   panel.classList.remove("hidden");
+}
+
+// ---------------------------------------------------------------------
+// PROSPECTING FUNCTIONS
+// ---------------------------------------------------------------------
+
+// Store current prospecting results for export
+let currentProspectingResults = [];
+
+// Helper function to validate single value (no commas, semicolons, or multiple entries)
+function validateSingleValue(value, fieldName) {
+  if (!value) return null; // Empty is allowed
+  
+  // Check for commas or semicolons (common separators)
+  if (value.includes(',') || value.includes(';')) {
+    return `${fieldName} must contain only one value. Please remove commas or semicolons.`;
+  }
+  
+  // Check for pipe separator
+  if (value.includes('|')) {
+    return `${fieldName} must contain only one value. Please remove pipe characters.`;
+  }
+  
+  return null; // Valid
+}
+
+// Build query function - matches backend logic
+function buildQuery(keywords, role, company) {
+  return `site:linkedin.com/in/ "${keywords} ${role} ${company}"`;
+}
+
+// Search prospects function - performs actual Google search
+async function searchProspects() {
+  // Hide previous errors
+  const errorBox = $("prospectingErrorBox");
+  errorBox.classList.add("hidden");
+  errorBox.textContent = "";
+
+  const keywords = $("prospectingKeywords").value.trim();
+  const role = $("prospectingRole").value.trim();
+  const company = $("prospectingCompany").value.trim();
+
+  // Validate single values
+  const errors = [];
+  const keywordError = validateSingleValue(keywords, "Keywords");
+  if (keywordError) errors.push(keywordError);
+  
+  const roleError = validateSingleValue(role, "Role");
+  if (roleError) errors.push(roleError);
+  
+  const companyError = validateSingleValue(company, "Company Name");
+  if (companyError) errors.push(companyError);
+
+  // Show errors if any
+  if (errors.length > 0) {
+    errorBox.textContent = errors.join(" ");
+    errorBox.classList.remove("hidden");
+    return; // Stop execution
+  }
+
+  // Show loading state
+  $("prospectingLoading").classList.remove("hidden");
+  $("prospectingResults").classList.add("hidden");
+  $("prospectingScroll").innerHTML = "";
+
+  try {
+    const API_URL = "";
+    const response = await fetch(`${API_URL}/api/prospecting/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keywords, role, company }),
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || "Search failed");
+    }
+
+    // Store results for export
+    currentProspectingResults = data.data || [];
+    
+    // Display results
+    $("prospectingLoading").classList.add("hidden");
+    displayProspectingResults(currentProspectingResults);
+    
+    // Log query for debugging
+    console.log("Search query:", data.query);
+    console.log("Results count:", currentProspectingResults.length);
+
+  } catch (err) {
+    console.error("Prospecting search error:", err);
+    $("prospectingLoading").classList.add("hidden");
+    $("prospectingResults").classList.remove("hidden");
+    errorBox.textContent = `Error: ${err.message}`;
+    errorBox.classList.remove("hidden");
+    $("prospectingScroll").innerHTML = `
+      <p class="text-red-500 px-4">Error: ${err.message}</p>
+    `;
+  }
+}
+
+// Helper function to display prospecting results
+function displayProspectingResults(results) {
+  const scroll = $("prospectingScroll");
+  scroll.innerHTML = "";
+
+  if (!results || results.length === 0) {
+    scroll.innerHTML = `<p class="text-gray-500 px-4 py-8 text-center">No results found.</p>`;
+    $("prospectingResults").classList.remove("hidden");
+    $("exportCsvBtn").classList.add("hidden");
+    $("prospectingResultsHeader").textContent = "";
+    return;
+  }
+
+  // Update result count header and show export button
+  $("prospectingResultsHeader").textContent = `Found ${results.length} result${results.length !== 1 ? 's' : ''}`;
+  $("exportCsvBtn").classList.remove("hidden");
+
+  // Display all results
+  results.forEach((result, index) => {
+    const card = document.createElement("div");
+    card.className = "bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow";
+    
+    const name = result.name || "Unknown";
+    const jobTitle = result.job_title || "";
+    const company = result.company || "";
+    const link = result.link || "";
+    const description = result.description || "";
+    
+    card.innerHTML = `
+      <div class="space-y-2">
+        <div class="flex items-start justify-between">
+          <div class="flex-1">
+            <h3 class="font-semibold text-brand text-lg">${name}</h3>
+            ${jobTitle ? `<p class="text-sm text-gray-700 mt-1">${jobTitle}</p>` : ""}
+          </div>
+          ${link ? `<a href="${link}" target="_blank" rel="noopener noreferrer" 
+                      class="ml-4 text-blue-600 hover:text-blue-800 text-sm font-medium whitespace-nowrap">
+                      View Profile →
+                    </a>` : ""}
+        </div>
+        ${description ? `<p class="text-xs text-gray-500 mt-2">${description}</p>` : ""}
+      </div>
+    `;
+    scroll.appendChild(card);
+  });
+
+  $("prospectingResults").classList.remove("hidden");
+  
+  // Log to console for debugging
+  console.log(`Displayed ${results.length} results`);
+}
+
+// Export prospecting results to CSV
+function exportProspectingResultsToCSV() {
+  if (!currentProspectingResults || currentProspectingResults.length === 0) {
+    alert("No results to export");
+    return;
+  }
+
+  // Define CSV headers
+  const headers = ["Name", "Job Title", "Company", "LinkedIn URL", "Description"];
+  
+  // Convert results to CSV rows
+  const csvRows = [
+    headers.join(","), // Header row
+    ...currentProspectingResults.map(result => {
+      const escapeCSV = (field) => {
+        if (!field) return "";
+        // Escape quotes and wrap in quotes if contains comma, quote, or newline
+        const str = String(field);
+        if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+      
+      return [
+        escapeCSV(result.name || ""),
+        escapeCSV(result.job_title || ""),
+        escapeCSV(result.company || ""),
+        escapeCSV(result.link || ""),
+        escapeCSV(result.description || "")
+      ].join(",");
+    })
+  ];
+
+  // Create CSV content
+  const csvContent = csvRows.join("\n");
+  
+  // Create blob and download
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  
+  // Generate filename with timestamp
+  const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `prospecting_results_${timestamp}.csv`);
+  link.style.visibility = "hidden";
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  // Clean up the URL object
+  URL.revokeObjectURL(url);
 }
 
 </script>
