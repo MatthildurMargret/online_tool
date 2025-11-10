@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Valuation Tool</title>
+  <title>Monty</title>
   <link rel="icon" type="image/png" href="favicon.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -539,10 +539,13 @@
     <!-- Interesting People Module -->
     <div id="interestingPeopleModule" class="hidden">
       <div class="module-card rounded-xl w-full p-6 space-y-4">
-        <p class="text-gray-600 mt-8 mb-10 px-6 py-4">
+        <p class="text-gray-600 mt-8 mb-2 px-6 py-4">
           This page displays potential future founders based on their profiles, skills, and recent activity. 
           People are ranked by their potential interest as founders, with those who have recently been acquired, 
           are building new ventures, or show strong entrepreneurial indicators appearing first.
+        </p>
+        <p class="text-sm text-gray-500 mb-8 px-6">
+          Source: <a href="https://www.aviato.co/" target="_blank" class="text-blue-600 hover:text-blue-800 underline">Aviato</a>
         </p>
         <!-- Two-column layout -->
         <div class="flex gap-6 mt-6">
@@ -1403,21 +1406,6 @@ function openFounderModal(data) {
   }
 
   // Optional sections
-  // Embedded News (only if not empty)
-  const embeddedNews = data.embeddednews;
-  if (embeddedNews && clean(embeddedNews)) {
-    // Check if it's an array or string
-    let newsContent = embeddedNews;
-    if (Array.isArray(embeddedNews)) {
-      if (embeddedNews.length > 0) {
-        newsContent = embeddedNews.join(", ");
-        html += `<div class="mt-2"><strong>Embedded News:</strong><div class="mt-1 text-gray-600">${newsContent}</div></div>`;
-      }
-    } else {
-      html += `<div class="mt-2"><strong>Embedded News:</strong><div class="mt-1 text-gray-600">${newsContent}</div></div>`;
-    }
-  }
-
   // Links section
   const links = [];
   if (data.profile_url)
@@ -1467,7 +1455,11 @@ async function searchFounders() {
       headers: { "x-api-key": API_KEY }
     });
     const json = await res.json();
-    const data = json.data || [];
+    const data = (json.data || []).sort((a, b) => {
+      const aDate = a.access_date ? new Date(a.access_date) : 0;
+      const bDate = b.access_date ? new Date(b.access_date) : 0;
+      return bDate - aDate;
+    });
 
     $("foundersLoading").classList.add("hidden");
 
@@ -1798,7 +1790,11 @@ async function loadRecommendedFiltered() {
       headers: { "x-api-key": API_KEY }
     });
     const json = await res.json();
-    const data = json.data || [];
+    const data = (json.data || []).sort((a, b) => {
+      const aDate = a.access_date ? new Date(a.access_date) : 0;
+      const bDate = b.access_date ? new Date(b.access_date) : 0;
+      return bDate - aDate;
+    });
 
     $("foundersLoading").classList.add("hidden");
 
@@ -1840,7 +1836,11 @@ async function loadDashboardRecommendations() {
       headers: { "x-api-key": API_KEY }
     });
     const json = await res.json();
-    const data = json.data || [];
+    const data = (json.data || []).sort((a, b) => {
+      const aDate = a.access_date ? new Date(a.access_date) : 0;
+      const bDate = b.access_date ? new Date(b.access_date) : 0;
+      return bDate - aDate;
+    });
 
     loadingEl.classList.add("hidden");
 
