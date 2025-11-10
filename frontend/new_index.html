@@ -1301,6 +1301,14 @@ function clean(value) {
   return str;
 }
 
+function ensureExternalUrl(url) {
+  if (!url) return null;
+  const trimmed = String(url).trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed.replace(/^\/+/, "")}`;
+}
+
 
 function openFounderModal(data) {
   const panel = $("founderDetailPanel");
@@ -1408,14 +1416,17 @@ function openFounderModal(data) {
   // Optional sections
   // Links section
   const links = [];
-  if (data.profile_url)
-    links.push(`<a href="${data.profile_url}" target="_blank" class="text-blue-600 underline hover:text-blue-800">LinkedIn Profile</a>`);
+  const profileUrl = ensureExternalUrl(data.profile_url);
+  if (profileUrl)
+    links.push(`<a href="${profileUrl}" target="_blank" class="text-blue-600 underline hover:text-blue-800">LinkedIn Profile</a>`);
   
-  if (data.company_website)
-    links.push(`<a href="${data.company_website}" target="_blank" class="text-blue-600 underline hover:text-blue-800">Company Website</a>`);
+  const companyWebsite = ensureExternalUrl(data.company_website);
+  if (companyWebsite)
+    links.push(`<a href="${companyWebsite}" target="_blank" class="text-blue-600 underline hover:text-blue-800">Company Website</a>`);
   
-  if (data.twitter)
-    links.push(`<a href="${data.twitter}" target="_blank" class="text-blue-600 underline hover:text-blue-800">Twitter</a>`);
+  const twitterUrl = ensureExternalUrl(data.twitter);
+  if (twitterUrl)
+    links.push(`<a href="${twitterUrl}" target="_blank" class="text-blue-600 underline hover:text-blue-800">Twitter</a>`);
 
   if (links.length > 0) {
     html += `<div class="mt-4 pt-3 border-t border-gray-200 flex flex-wrap gap-3">${links.join("")}</div>`;
@@ -2516,10 +2527,11 @@ function openPersonModal(person) {
   let html = `<div class="space-y-3 text-sm text-gray-700">`;
 
   // Main fields (excluding Full Name, Headline, LinkedIn ID, and Aviato ID)
+  const linkedinUrl = ensureExternalUrl(person.linkedin_url);
   const fields = [
     ["Location", person.location],
     ["Current Company", person.current_company_name],
-    ["LinkedIn", person.linkedin_url ? `<a href="https://${person.linkedin_url}" target="_blank" class="text-blue-600 underline hover:text-blue-800">${person.linkedin_url}</a>` : null],
+    ["LinkedIn", linkedinUrl ? `<a href="${linkedinUrl}" target="_blank" class="text-blue-600 underline hover:text-blue-800">${person.linkedin_url}</a>` : null],
     ["Last Updated", person.last_updated ? new Date(person.last_updated).toLocaleDateString() : null],
   ];
 
