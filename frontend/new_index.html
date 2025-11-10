@@ -1229,6 +1229,159 @@ async function fetchIndustryComparison() {
   const API_KEY = "5f8e7ac4f6f8a3b6b2d91c66e01d0f7d1a91f4f4bfc1f3263e57b85c14f6a733";
 
 const FOUNDERS_API = "https://monty-api-production.up.railway.app";
+const CONTACT_STATUS_ENDPOINT = "/api/founders/contact-status";
+const contactStatusCache = new Map();
+
+function resolveEntryId(row) {
+  const candidates = [
+    row.entry_id,
+    row.id,
+    row.uuid,
+    row.company_uuid,
+    row.company_id,
+    row.profile_url,
+    row.company_name
+  ];
+
+  for (const value of candidates) {
+    if (value === null || value === undefined) continue;
+    const str = String(value).trim();
+    if (str) return str;
+  }
+
+  return null;
+}
+
+async function fetchContactStatuses(entryIds) {
+  const ids = Array.from(new Set(entryIds.filter(Boolean)));
+  if (!ids.length) return {};
+
+  const uncached = ids.filter(id => !contactStatusCache.has(id));
+
+  if (uncached.length) {
+    const params = new URLSearchParams();
+    uncached.forEach(id => params.append("ids", id));
+
+    try {
+      const res = await fetch(`${CONTACT_STATUS_ENDPOINT}?${params.toString()}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          Object.entries(json.data).forEach(([key, value]) => {
+            contactStatusCache.set(key, value);
+          });
+        }
+      } else {
+        console.error("Failed to fetch contact status", res.statusText);
+      }
+    } catch (err) {
+      console.error("Error fetching contact status", err);
+    }
+  }
+
+  const map = {};
+  ids.forEach(id => {
+    if (contactStatusCache.has(id)) {
+      map[id] = contactStatusCache.get(id);
+    }
+  });
+  return map;
+}
+
+async function persistFounderStatus(entryId, updates = {}) {
+  const payload = { ...updates };
+  const res = await fetch(`${CONTACT_STATUS_ENDPOINT}/${encodeURIComponent(entryId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to update founder status: ${res.status} ${res.statusText}`);
+  }
+
+  const json = await res.json();
+  if (!json.success) {
+    throw new Error(json.error || "Unknown error while updating founder status");
+  }
+
+  const record = json.data || { entry_id: entryId, ...updates };
+  contactStatusCache.set(entryId, record);
+  return record;
+}
+
+function formatContactedTimestamp(value) {
+  if (!value) return "";
+  try {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  } catch (err) {
+    console.warn("Failed to format contacted timestamp", err);
+    return "";
+  }
+}
+
+function syncFounderStatusUI(card, record) {
+  if (!card || !record) return;
+
+  const toggles = card.querySelectorAll("input.founder-status-toggle");
+  toggles.forEach(toggle => {
+    const statusType = toggle.dataset.statusType;
+    if (!statusType) return;
+    if (statusType in record) {
+      toggle.checked = Boolean(record[statusType]);
+    }
+  });
+
+  const metas = card.querySelectorAll(".status-meta");
+  metas.forEach(meta => {
+    const statusType = meta.dataset.statusType;
+    if (!statusType) return;
+    const isActive = Boolean(record[statusType]);
+    const timestampKey = `${statusType}_at`;
+    const formatted = isActive ? formatContactedTimestamp(record[timestampKey]) : "";
+    if (formatted) {
+      meta.textContent = `Updated ${formatted}`;
+      meta.classList.remove("hidden");
+    } else {
+      meta.textContent = "";
+      meta.classList.add("hidden");
+    }
+  });
+}
+
+function attachContactStatusHandlers(card, row) {
+  const toggles = card.querySelectorAll("input.founder-status-toggle");
+  if (!toggles.length) return;
+
+  toggles.forEach(toggle => {
+    toggle.addEventListener("click", event => event.stopPropagation());
+    toggle.addEventListener("change", async event => {
+      event.stopPropagation();
+
+      const encodedId = toggle.dataset.entryId || "";
+      const entryId = encodedId ? decodeURIComponent(encodedId) : resolveEntryId(row);
+      const statusType = toggle.dataset.statusType;
+
+      if (!entryId || !statusType) return;
+
+      const nextValue = toggle.checked;
+      toggle.disabled = true;
+
+      try {
+        const record = await persistFounderStatus(entryId, { [statusType]: nextValue });
+        syncFounderStatusUI(card, record);
+      } catch (err) {
+        console.error("Failed to persist founder status", err);
+        toggle.checked = !nextValue;
+        alert("Failed to update status. Please try again.");
+      } finally {
+        toggle.disabled = false;
+      }
+    });
+  });
+}
 
 async function loadFounders(endpoint) {
   $("foundersLoading").classList.remove("hidden");
@@ -1256,33 +1409,21 @@ async function loadFounders(endpoint) {
       return;
     }
 
+    const entryIds = data.map(resolveEntryId).filter(Boolean);
+    let contactStatusMap = {};
+    try {
+      contactStatusMap = await fetchContactStatuses(entryIds);
+    } catch (err) {
+      console.error("Unable to load contact status", err);
+    }
+
     const scroll = $("foundersScroll");
     for (const row of data.slice(0, 50)) {
-      const company = row.company_name || "Unknown";
-      const treePath = row.tree_path || "—";
-      const companyWebsite = row.company_website || "—";
-      const profileUrl = row.profile_url || "—";
-      const tags = (row.company_tags || "")
-      .split(",")
-      .map(t => t.trim())
-      .filter(t => t && t.toLowerCase() !== "none");
-
       const card = document.createElement("div");
       card.className =
         "min-w-[250px] bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer flex flex-col justify-between";
-      card.innerHTML = `
-        <div>
-          <h3 class="font-semibold text-brand text-lg truncate">${company}</h3>
-          <p class="text-xs text-gray-500 mt-1">${treePath}</p>
-        </div>
-        ${tags.length
-          ? `<div class="flex flex-wrap gap-1 mt-3">
-              ${tags.map(t => `<span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">${t}</span>`).join("")}
-            </div>`
-          : ""}
-      `;
-
-      // Add click handler to show detail modal
+      card.innerHTML = createFounderCardHTML(row, contactStatusMap);
+      attachContactStatusHandlers(card, row);
       card.addEventListener("click", () => openFounderModal(row));
       scroll.appendChild(card);
     }
@@ -1480,11 +1621,19 @@ async function searchFounders() {
       return;
     }
 
+    let contactStatusMap = {};
+    try {
+      contactStatusMap = await fetchContactStatuses(data.map(resolveEntryId));
+    } catch (err) {
+      console.error("Failed to load contact status for search results", err);
+    }
+
     const scroll = $("searchScroll");
     for (const row of data.slice(0, 50)) {
       const card = document.createElement("div");
       card.className = "bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer transition-shadow";
-      card.innerHTML = createFounderCardHTML(row);
+      card.innerHTML = createFounderCardHTML(row, contactStatusMap);
+      attachContactStatusHandlers(card, row);
       card.addEventListener("click", () => openFounderModal(row));
       scroll.appendChild(card);
     }
@@ -1726,7 +1875,7 @@ function getSelectedTreePath() {
 }
 
 // Helper function to create founder card HTML
-function createFounderCardHTML(row) {
+function createFounderCardHTML(row, contactStatusMap = {}) {
   const company = row.company_name || "Unknown";
   const founder = row.name || "";
   const treePath = row.tree_path || "—";
@@ -1735,6 +1884,13 @@ function createFounderCardHTML(row) {
   const businessStage = row.business_stage || "";
   const repeatFounder = row.repeat_founder === true || row.repeat_founder === "true" || String(row.repeat_founder).toLowerCase() === "true";
   const technical = row.technical === true || row.technical === "true" || String(row.technical).toLowerCase() === "true";
+  const entryId = resolveEntryId(row);
+  const status = entryId ? (contactStatusMap[entryId] || contactStatusCache.get(entryId)) : undefined;
+  const isContacted = status ? Boolean(status.contacted) : false;
+  const isInPipeline = status ? Boolean(status.in_pipeline) : false;
+  const encodedEntryId = entryId ? encodeURIComponent(entryId) : "";
+  const contactedMeta = status?.contacted ? formatContactedTimestamp(status.contacted_at) : "";
+  const pipelineMeta = status?.in_pipeline ? formatContactedTimestamp(status.in_pipeline_at) : "";
   
   const tags = (row.company_tags || "")
     .split(",")
@@ -1749,11 +1905,45 @@ function createFounderCardHTML(row) {
     .filter(v => v);
 
   return `
-    <div class="space-y-2">
-      <div>
+    <div class="space-y-3">
+      <div class="flex items-start justify-between gap-3">
+        <div>
         <h3 class="font-semibold text-brand text-lg">${company}</h3>
         ${founder ? `<p class="text-xs text-gray-600 mt-0.5">${founder}</p>` : ""}
         <p class="text-xs text-gray-500 mt-1">${treePath}</p>
+        </div>
+        ${entryId ? `
+          <div class="status-controls flex flex-col items-end gap-1 text-[10px] leading-snug text-gray-600 min-w-[120px]">
+            <div class="status-group flex flex-col items-end gap-0.5 w-full">
+              <label class="status-toggle grid grid-cols-[auto_minmax(12px,16px)] items-center gap-x-1 gap-y-0.5 w-full">
+                <span class="text-right">Reached out</span>
+                <input type="checkbox"
+                       class="founder-status-toggle accent-blue-600 h-3 w-3 justify-self-end"
+                       data-entry-id="${encodedEntryId}"
+                       data-status-type="contacted"
+                       ${isContacted ? "checked" : ""} />
+              </label>
+              <span class="status-meta text-[9px] text-gray-500 uppercase tracking-wide ${contactedMeta ? "" : "hidden"}"
+                    data-status-type="contacted">
+                ${contactedMeta ? `Updated ${contactedMeta}` : ""}
+              </span>
+            </div>
+            <div class="status-group flex flex-col items-end gap-0.5 w-full">
+              <label class="status-toggle grid grid-cols-[auto_minmax(12px,16px)] items-center gap-x-1 gap-y-0.5 w-full">
+                <span class="text-right">In pipeline</span>
+                <input type="checkbox"
+                       class="founder-status-toggle accent-blue-600 h-3 w-3 justify-self-end"
+                       data-entry-id="${encodedEntryId}"
+                       data-status-type="in_pipeline"
+                       ${isInPipeline ? "checked" : ""} />
+              </label>
+              <span class="status-meta text-[9px] text-gray-500 uppercase tracking-wide ${pipelineMeta ? "" : "hidden"}"
+                    data-status-type="in_pipeline">
+                ${pipelineMeta ? `Updated ${pipelineMeta}` : ""}
+              </span>
+            </div>
+          </div>
+        ` : ""}
       </div>
       
       ${location || funding || businessStage ? `
@@ -1815,11 +2005,19 @@ async function loadRecommendedFiltered() {
       return;
     }
 
+    let contactStatusMap = {};
+    try {
+      contactStatusMap = await fetchContactStatuses(data.map(resolveEntryId));
+    } catch (err) {
+      console.error("Failed to load contact status for recommendations", err);
+    }
+
     const scroll = $("recommendedScroll");
     for (const row of data.slice(0, 50)) {
       const card = document.createElement("div");
       card.className = "bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer transition-shadow";
-      card.innerHTML = createFounderCardHTML(row);
+      card.innerHTML = createFounderCardHTML(row, contactStatusMap);
+      attachContactStatusHandlers(card, row);
       card.addEventListener("click", () => openFounderModal(row));
       scroll.appendChild(card);
     }
@@ -1862,11 +2060,19 @@ async function loadDashboardRecommendations() {
 
     // Show only top 5
     const top5 = data.slice(0, 5);
-    
-    top5.forEach((row, index) => {
+
+    let contactStatusMap = {};
+    try {
+      contactStatusMap = await fetchContactStatuses(top5.map(resolveEntryId));
+    } catch (err) {
+      console.error("Failed to load contact status for dashboard", err);
+    }
+
+    top5.forEach((row) => {
       const card = document.createElement("div");
       card.className = "bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer transition-shadow";
-      card.innerHTML = createFounderCardHTML(row);
+      card.innerHTML = createFounderCardHTML(row, contactStatusMap);
+      attachContactStatusHandlers(card, row);
       card.addEventListener("click", () => {
         showModule('foundersModule');
         // Small delay to ensure module is visible before opening modal

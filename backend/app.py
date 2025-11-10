@@ -18,7 +18,9 @@ from supabase_db import (
     get_early_deals,
     get_deals_categories,
     get_deals_funding_rounds,
-    get_interesting_people
+    get_interesting_people,
+    get_founder_contact_status,
+    upsert_founder_contact_status
 )
 from utils.stock_price import get_price_with_cache
 from utils.formatting import clean_nans
@@ -372,6 +374,61 @@ def get_interesting_people_endpoint():
     try:
         people = get_interesting_people()
         return jsonify({"success": True, "data": people})
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------
+# FOUNDER CONTACT STATUS ENDPOINTS
+# ---------------------------------------------------------------------
+
+@app.route("/api/founders/contact-status", methods=["GET"])
+def get_founder_contact_status_endpoint():
+    """Retrieve contact status for a list of sourcing entries"""
+    raw_ids = request.args.getlist("ids")
+    if len(raw_ids) == 1 and "," in raw_ids[0]:
+        raw_ids = [value.strip() for value in raw_ids[0].split(",") if value.strip()]
+
+    entry_ids = [value for value in raw_ids if value]
+
+    if not entry_ids:
+        return jsonify({"success": True, "data": {}})
+
+    try:
+        data = get_founder_contact_status(entry_ids)
+        return jsonify({"success": True, "data": data})
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/founders/contact-status/<path:entry_id>", methods=["PUT"])
+def upsert_founder_contact_status_endpoint(entry_id: str):
+    """Persist contact status for a specific sourcing entry"""
+    try:
+        payload = request.get_json(force=True) or {}
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Invalid JSON payload: {e}"}), 400
+
+    contacted_raw = payload.get("contacted")
+    contacted = bool(contacted_raw) if contacted_raw is not None else None
+    contacted_by = payload.get("contacted_by")
+    in_pipeline_raw = payload.get("in_pipeline")
+    in_pipeline = bool(in_pipeline_raw) if in_pipeline_raw is not None else None
+
+    try:
+        record = upsert_founder_contact_status(
+            entry_id,
+            contacted=contacted,
+            contacted_by=contacted_by,
+            in_pipeline=in_pipeline,
+        )
+        if record is None:
+            return jsonify({"success": False, "error": "Failed to update contact status"}), 500
+        return jsonify({"success": True, "data": record})
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
     except Exception as e:
         print(traceback.format_exc())
         return jsonify({"success": False, "error": str(e)}), 500

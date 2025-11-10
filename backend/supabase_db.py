@@ -360,3 +360,99 @@ def get_interesting_people() -> List[Dict]:
     except Exception as e:
         print(f"Error retrieving interesting people: {e}")
         return []
+
+
+def get_founder_contact_status(entry_ids: List[str]) -> Dict[str, Dict]:
+    """
+    Fetch contact status for a list of sourcing entry_ids.
+    Returns mapping of entry_id -> status payload.
+    """
+    if not supabase:
+        raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
+
+    if not entry_ids:
+        return {}
+
+    try:
+        result = (
+            supabase.table("founder_contact_status")
+            .select("entry_id, contacted, contacted_at, contacted_by, in_pipeline, in_pipeline_at")
+            .in_("entry_id", entry_ids)
+            .execute()
+        )
+        return {row["entry_id"]: row for row in result.data or []}
+    except Exception as e:
+        print(f"Error retrieving founder contact status: {e}")
+        return {}
+
+
+def upsert_founder_contact_status(
+    entry_id: str,
+    contacted: Optional[bool] = None,
+    contacted_by: Optional[str] = None,
+    in_pipeline: Optional[bool] = None,
+) -> Optional[Dict]:
+    """
+    Persist outreach status for a sourcing entry.
+    When a status boolean is True, the corresponding *_at timestamp is set to current UTC time.
+    """
+    if not supabase:
+        raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
+
+    if not entry_id:
+        raise ValueError("entry_id is required")
+
+    payload: Dict[str, Optional[Union[str, bool]]] = {"entry_id": entry_id}
+    contacted_provided = contacted is not None
+    in_pipeline_provided = in_pipeline is not None
+
+    if contacted_provided:
+        payload["contacted"] = bool(contacted)
+        payload["contacted_at"] = datetime.utcnow().isoformat() + "Z" if contacted else None
+
+    if contacted_by is not None:
+        payload["contacted_by"] = contacted_by
+
+    if in_pipeline_provided:
+        payload["in_pipeline"] = bool(in_pipeline)
+        payload["in_pipeline_at"] = datetime.utcnow().isoformat() + "Z" if in_pipeline else None
+
+    existing_record: Optional[Dict] = None
+    try:
+        existing_result = (
+            supabase.table("founder_contact_status")
+            .select("entry_id, contacted, contacted_at, contacted_by, in_pipeline, in_pipeline_at")
+            .eq("entry_id", entry_id)
+            .execute()
+        )
+        if existing_result.data:
+            existing_record = existing_result.data[0]
+    except Exception as e:
+        print(f"Error fetching existing founder contact status for {entry_id}: {e}")
+
+    if existing_record is None:
+        if not contacted_provided:
+            payload["contacted"] = False
+            payload["contacted_at"] = None
+        if not in_pipeline_provided:
+            payload["in_pipeline"] = False
+            payload["in_pipeline_at"] = None
+        if "contacted_by" not in payload:
+            payload["contacted_by"] = None
+
+    try:
+        result = (
+            supabase.table("founder_contact_status")
+            .upsert(payload, on_conflict="entry_id")
+            .execute()
+        )
+        if result.data:
+            return result.data[0]
+        if existing_record:
+            merged = existing_record.copy()
+            merged.update(payload)
+            return merged
+        return payload
+    except Exception as e:
+        print(f"Error upserting founder contact status for {entry_id}: {e}")
+        return None
