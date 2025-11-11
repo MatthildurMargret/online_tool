@@ -801,7 +801,7 @@ function showModule(id) {
 
   <script>
     
-    const API_URL = "https://monty-backend-production.up.railway.app";
+    const API_URL = "";
     const $ = (id) => document.getElementById(id);
 
     function fmtNum(v) {
@@ -1229,7 +1229,7 @@ async function fetchIndustryComparison() {
   const API_KEY = "5f8e7ac4f6f8a3b6b2d91c66e01d0f7d1a91f4f4bfc1f3263e57b85c14f6a733";
 
 const FOUNDERS_API = "https://monty-api-production.up.railway.app";
-const CONTACT_STATUS_ENDPOINT = `${API_URL}/api/founders/contact-status`;
+const CONTACT_STATUS_ENDPOINT = "/api/founders/contact-status";
 const contactStatusCache = new Map();
 
 function resolveEntryId(row) {
@@ -3056,7 +3056,7 @@ async function searchProspects() {
   $("prospectingScroll").innerHTML = "";
 
   try {
-    const API_URL = "https://monty-backend-production.up.railway.app";
+    const API_URL = "";
     const response = await fetch(`${API_URL}/api/prospecting/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
