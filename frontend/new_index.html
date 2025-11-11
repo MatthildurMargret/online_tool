@@ -2558,16 +2558,232 @@ function createDealCardHTML(deal) {
 function parseArrayOrString(value) {
   if (!value) return [];
   if (Array.isArray(value)) return value.filter(Boolean);
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
       if (Array.isArray(parsed)) return parsed.filter(Boolean);
     } catch (e) {
       // Not JSON, try comma-separated
-      return value.split(',').map(s => s.trim()).filter(s => s && s.toLowerCase() !== 'none');
+      return value
+        .split(",")
+        .map(s => s.trim())
+        .filter(s => s && s.toLowerCase() !== "none");
     }
   }
   return [];
+}
+
+function collectCompanyNames(value) {
+  const seen = new Set();
+  const names = [];
+
+  const addName = name => {
+    if (!name) return;
+    const cleaned = String(name).trim();
+    if (!cleaned) return;
+    const key = cleaned.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    names.push(cleaned);
+  };
+
+  const handleValue = (input, depth = 0) => {
+    if (input == null || depth > 3) return;
+
+    if (typeof input === "string") {
+      const parsed = parseArrayOrString(input);
+      if (parsed.length > 0) {
+        parsed.forEach(addName);
+      } else {
+        addName(input);
+      }
+      return;
+    }
+
+    if (Array.isArray(input)) {
+      input.forEach(item => handleValue(item, depth + 1));
+      return;
+    }
+
+    if (typeof input === "object") {
+      const candidates = [
+        input.company_name,
+        input.company,
+        input.name,
+        input.employer,
+        input.organization,
+        input.org,
+      ];
+      candidates.forEach(addName);
+
+      if (input.company && typeof input.company === "object") {
+        handleValue(input.company, depth + 1);
+      }
+
+      Object.values(input).forEach(val => {
+        if (typeof val === "string" || Array.isArray(val)) {
+          handleValue(val, depth + 1);
+        }
+      });
+    }
+  };
+
+  handleValue(value);
+  return names;
+}
+
+function getRawProfile(person) {
+  if (!person) return null;
+  const raw = person.raw_profile_data;
+  if (!raw) return null;
+  if (typeof raw === "object") return raw;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw);
+    } catch (err) {
+      console.warn("Failed to parse raw_profile_data", err);
+      return null;
+    }
+  }
+  return null;
+}
+
+function extractExperiences(person) {
+  const profile = getRawProfile(person);
+  if (!profile || !Array.isArray(profile.experienceList)) return [];
+
+  return profile.experienceList
+    .map(exp => {
+      const name =
+        exp.companyName ||
+        exp.company?.name ||
+        exp.company?.company_name ||
+        exp.company;
+      if (!name) return null;
+      return {
+        name: String(name).trim(),
+        startDate: exp.startDate ? new Date(exp.startDate) : null,
+        endDate: exp.endDate ? new Date(exp.endDate) : null,
+      };
+    })
+    .filter(Boolean);
+}
+
+function getCurrentCompany(person) {
+  const directCandidates = [
+    person.current_company_name,
+    person.current_company,
+    person.company,
+    person.current_employer,
+    person.employer,
+  ];
+
+  for (const candidate of directCandidates) {
+    if (candidate && String(candidate).trim()) {
+      return String(candidate).trim();
+    }
+  }
+
+  const listCandidates = [
+    person.current_companies,
+    person.companies,
+    person.company_history,
+    person.positions,
+    person.work_history,
+  ];
+
+  for (const candidate of listCandidates) {
+    const names = collectCompanyNames(candidate);
+    if (names.length > 0) return names[0];
+  }
+
+  const experiences = extractExperiences(person);
+  if (experiences.length > 0) {
+    const now = new Date();
+    const current = experiences
+      .filter(exp => !exp.endDate || exp.endDate.getTime() >= now.getTime())
+      .sort((a, b) => {
+        const aStart = a.startDate ? a.startDate.getTime() : -Infinity;
+        const bStart = b.startDate ? b.startDate.getTime() : -Infinity;
+        return bStart - aStart;
+      });
+
+    if (current.length > 0) {
+      return current[0].name;
+    }
+
+    const sortedByStart = [...experiences].sort((a, b) => {
+      const aStart = a.startDate ? a.startDate.getTime() : -Infinity;
+      const bStart = b.startDate ? b.startDate.getTime() : -Infinity;
+      return bStart - aStart;
+    });
+    if (sortedByStart.length > 0) {
+      return sortedByStart[0].name;
+    }
+  }
+
+  const headline = person.headline || "";
+  const headlineMatch = headline.match(/@([^|,•–—-]+)/);
+  if (headlineMatch) {
+    return headlineMatch[1].trim();
+  }
+
+  return "";
+}
+
+function getPreviousCompanies(person, currentCompany = "") {
+  const sources = [
+    person.previous_companies,
+    person.past_companies,
+    person.prior_companies,
+    person.company_history,
+    person.positions,
+    person.work_history,
+    person.employment_history,
+  ];
+
+  const names = [];
+
+  const currentLower = currentCompany ? currentCompany.toLowerCase() : "";
+
+  const experiences = extractExperiences(person);
+  experiences.forEach(exp => {
+    if (!exp.name) return;
+    const key = exp.name.toLowerCase();
+    if (currentLower && key === currentLower) return;
+    names.push(exp.name);
+  });
+
+  sources.forEach(source => {
+    collectCompanyNames(source).forEach(name => names.push(name));
+  });
+
+  const unique = [];
+  const seen = new Set();
+
+  names.forEach(name => {
+    const key = name.toLowerCase();
+    if (currentLower && key === currentLower) return;
+    if (seen.has(key)) return;
+    seen.add(key);
+    unique.push(name);
+  });
+
+  return unique;
+}
+
+// Helper to render a badge list with limit
+function renderBadgeList(values, { limit = 3, emptyText = "" } = {}) {
+  if (!values || values.length === 0) return emptyText;
+  const limited = values.slice(0, limit);
+  const remaining = values.length - limited.length;
+  const badges = limited.map(
+    value => `<span class="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">${value}</span>`
+  );
+  if (remaining > 0) {
+    badges.push(`<span class="text-xs text-gray-500">+${remaining} more</span>`);
+  }
+  return badges.join("");
 }
 
 // Helper function to score person based on headline keywords
@@ -2622,9 +2838,8 @@ function createPersonCardHTML(person) {
   const fullName = person.full_name || "Unknown";
   const headline = person.headline || "";
   const location = person.location || "";
-  const currentCompany = person.current_company_name || "";
-  const skills = parseArrayOrString(person.skills);
-  const highlightList = parseArrayOrString(person.computed_highlight_list);
+  const currentCompany = getCurrentCompany(person);
+  const pastCompanies = getPreviousCompanies(person, currentCompany);
 
   return `
     <div class="space-y-2">
@@ -2640,17 +2855,10 @@ function createPersonCardHTML(person) {
         </div>
       ` : ""}
       
-      ${highlightList.length > 0 ? `
-        <div class="flex flex-wrap gap-1">
-          ${highlightList.slice(0, 3).map(h => `<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">${h}</span>`).join("")}
-          ${highlightList.length > 3 ? `<span class="text-xs text-gray-500">+${highlightList.length - 3} more</span>` : ""}
-        </div>
-      ` : ""}
-      
-      ${skills.length > 0 ? `
-        <div class="flex flex-wrap gap-1">
-          ${skills.slice(0, 2).map(s => `<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">${s}</span>`).join("")}
-          ${skills.length > 2 ? `<span class="text-xs text-gray-500">+${skills.length - 2} more</span>` : ""}
+      ${pastCompanies.length > 0 ? `
+        <div class="flex flex-wrap gap-1 text-[11px] text-gray-600">
+          <span class="font-medium text-gray-700">Prev:</span>
+          ${renderBadgeList(pastCompanies, { limit: 3 })}
         </div>
       ` : ""}
     </div>
@@ -2734,9 +2942,10 @@ function openPersonModal(person) {
 
   // Main fields (excluding Full Name, Headline, LinkedIn ID, and Aviato ID)
   const linkedinUrl = ensureExternalUrl(person.linkedin_url);
+  const currentCompany = getCurrentCompany(person);
   const fields = [
     ["Location", person.location],
-    ["Current Company", person.current_company_name],
+    ["Current Company", currentCompany],
     ["LinkedIn", linkedinUrl ? `<a href="${linkedinUrl}" target="_blank" class="text-blue-600 underline hover:text-blue-800">${person.linkedin_url}</a>` : null],
     ["Last Updated", person.last_updated ? new Date(person.last_updated).toLocaleDateString() : null],
   ];
@@ -2763,6 +2972,16 @@ function openPersonModal(person) {
     html += `<div class="mt-3"><strong class="text-gray-700">Skills:</strong><div class="flex flex-wrap gap-2 mt-2">`;
     skills.forEach(skill => {
       html += `<span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">${skill}</span>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // Previous Companies
+  const pastCompanies = getPreviousCompanies(person, currentCompany);
+  if (pastCompanies.length > 0) {
+    html += `<div class="mt-3"><strong class="text-gray-700">Previous Companies:</strong><div class="flex flex-wrap gap-2 mt-2">`;
+    pastCompanies.forEach(company => {
+      html += `<span class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full">${company}</span>`;
     });
     html += `</div></div>`;
   }
