@@ -427,60 +427,6 @@ def get_founder_contact_status(entry_ids: List[str]) -> Dict[str, Dict]:
                 all_ids_to_try.add(f'www.{eid}')
 
     try:
-        # Debug logging
-        print(f"[get_founder_contact_status] Requested {len(entry_ids)} entry IDs: {entry_ids[:3]}...")
-        print(f"[get_founder_contact_status] Querying with {len(all_ids_to_try)} variations: {list(all_ids_to_try)[:5]}...")
-        
-        # Debug: Check what's actually in the database
-        if len(entry_ids) > 0:
-            sample_id = entry_ids[0]
-            print(f"[get_founder_contact_status] DEBUG: Sample requested ID: '{sample_id}'")
-            print(f"[get_founder_contact_status] DEBUG: Normalized sample: '{normalize_entry_id(sample_id)}'")
-            
-            # Try exact match first
-            try:
-                exact_result = (
-                    supabase.table("founder_contact_status")
-                    .select("entry_id")
-                    .eq("entry_id", sample_id)
-                    .limit(1)
-                    .execute()
-                )
-                if exact_result.data:
-                    print(f"[get_founder_contact_status] DEBUG: Found exact match: {exact_result.data[0]['entry_id']}")
-                else:
-                    print(f"[get_founder_contact_status] DEBUG: No exact match found")
-                    
-                # Try with normalized version
-                normalized_sample = normalize_entry_id(sample_id)
-                if normalized_sample != sample_id:
-                    norm_result = (
-                        supabase.table("founder_contact_status")
-                        .select("entry_id")
-                        .eq("entry_id", normalized_sample)
-                        .limit(1)
-                        .execute()
-                    )
-                    if norm_result.data:
-                        print(f"[get_founder_contact_status] DEBUG: Found normalized match: {norm_result.data[0]['entry_id']}")
-                
-                # Get a sample of what's actually in the database
-                sample_db = (
-                    supabase.table("founder_contact_status")
-                    .select("entry_id")
-                    .limit(5)
-                    .execute()
-                )
-                if sample_db.data:
-                    print(f"[get_founder_contact_status] DEBUG: Sample entry_ids in DB: {[r['entry_id'] for r in sample_db.data]}")
-                else:
-                    print(f"[get_founder_contact_status] DEBUG: No records found in founder_contact_status table at all!")
-                    
-            except Exception as debug_e:
-                import traceback
-                print(f"[get_founder_contact_status] DEBUG query error: {debug_e}")
-                print(traceback.format_exc())
-        
         # Supabase .in_() has a limit, so batch queries if needed (limit is typically 100)
         BATCH_SIZE = 100
         all_ids_list = list(all_ids_to_try)
@@ -488,7 +434,6 @@ def get_founder_contact_status(entry_ids: List[str]) -> Dict[str, Dict]:
         
         for i in range(0, len(all_ids_list), BATCH_SIZE):
             batch = all_ids_list[i:i + BATCH_SIZE]
-            print(f"[get_founder_contact_status] Querying batch {i//BATCH_SIZE + 1} with {len(batch)} IDs")
             
             result = (
                 supabase.table("founder_contact_status")
@@ -497,16 +442,10 @@ def get_founder_contact_status(entry_ids: List[str]) -> Dict[str, Dict]:
                 .execute()
             )
             
-            print(f"[get_founder_contact_status] Batch returned {len(result.data or [])} rows")
-            if result.data:
-                print(f"[get_founder_contact_status] Sample returned entry_ids: {[r['entry_id'] for r in result.data[:3]]}")
-            
             # Build result map: for each found record, map it to all requested IDs that match
             for row in result.data or []:
                 db_entry_id = row["entry_id"]
                 db_normalized = normalize_entry_id(db_entry_id)
-                
-                print(f"[get_founder_contact_status] Processing DB entry_id: {db_entry_id}, normalized: {db_normalized}")
                 
                 # Map this record to all requested IDs that normalize to the same value
                 if db_normalized in id_mapping:
@@ -516,7 +455,6 @@ def get_founder_contact_status(entry_ids: List[str]) -> Dict[str, Dict]:
                 result_map[db_normalized] = row
                 result_map[db_entry_id] = row
         
-        print(f"[get_founder_contact_status] Final result map has {len(result_map)} entries")
         return result_map
     except Exception as e:
         import traceback

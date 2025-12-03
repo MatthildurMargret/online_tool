@@ -2,11 +2,13 @@ import os
 import json
 import traceback
 import re
+import logging
 from flask import jsonify
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, send_file, Response, stream_with_context
 from flask_cors import CORS
 from dotenv import load_dotenv
+from werkzeug.serving import WSGIRequestHandler
 from edgar import Company, set_identity
 from alpaca.data.historical import StockHistoricalDataClient
 from test_supabase import get_reported_numbers, compute_metrics, get_price
@@ -39,6 +41,9 @@ load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
+# Suppress werkzeug access logs completely
+logging.getLogger('werkzeug').disabled = True
 
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
 set_identity("matthildur@montageventures.com")
@@ -389,14 +394,28 @@ def get_interesting_people_endpoint():
 # FOUNDER CONTACT STATUS ENDPOINTS
 # ---------------------------------------------------------------------
 
-@app.route("/api/founders/contact-status", methods=["GET"])
+@app.route("/api/founders/contact-status", methods=["GET", "POST"])
 def get_founder_contact_status_endpoint():
-    """Retrieve contact status for a list of sourcing entries"""
-    raw_ids = request.args.getlist("ids")
-    if len(raw_ids) == 1 and "," in raw_ids[0]:
-        raw_ids = [value.strip() for value in raw_ids[0].split(",") if value.strip()]
+    """Retrieve contact status for a list of sourcing entries
+    
+    Supports both GET (for backward compatibility) and POST (recommended for large requests).
+    POST sends IDs in request body as JSON: {"ids": ["id1", "id2", ...]}
+    """
+    # Try POST body first (preferred for large requests)
+    if request.method == "POST":
+        payload = request.get_json(force=True) or {}
+        entry_ids = payload.get("ids", [])
+        if not isinstance(entry_ids, list):
+            entry_ids = []
+    else:
+        # GET method - backward compatibility
+        raw_ids = request.args.getlist("ids")
+        if len(raw_ids) == 1 and "," in raw_ids[0]:
+            raw_ids = [value.strip() for value in raw_ids[0].split(",") if value.strip()]
+        entry_ids = [value for value in raw_ids if value]
 
-    entry_ids = [value for value in raw_ids if value]
+    # Filter out empty values
+    entry_ids = [eid for eid in entry_ids if eid and str(eid).strip()]
 
     if not entry_ids:
         return jsonify({"success": True, "data": {}})
@@ -423,9 +442,6 @@ def upsert_founder_contact_status_endpoint(entry_id: str):
     in_pipeline_raw = payload.get("in_pipeline")
     in_pipeline = bool(in_pipeline_raw) if in_pipeline_raw is not None else None
 
-    print(f"[upsert_founder_contact_status_endpoint] Entry ID: {entry_id}")
-    print(f"[upsert_founder_contact_status_endpoint] Payload received: contacted={contacted_raw} -> {contacted}, in_pipeline={in_pipeline_raw} -> {in_pipeline}")
-
     try:
         record = upsert_founder_contact_status(
             entry_id,
@@ -433,7 +449,6 @@ def upsert_founder_contact_status_endpoint(entry_id: str):
             contacted_by=contacted_by,
             in_pipeline=in_pipeline,
         )
-        print(f"[upsert_founder_contact_status_endpoint] Record returned: {record}")
         if record is None:
             return jsonify({"success": False, "error": "Failed to update contact status"}), 500
         return jsonify({"success": True, "data": record})
@@ -629,4 +644,10 @@ if __name__ == "__main__":
     print("=" * 60)
     print(f"📊 Running on port {port}")
     print("=" * 60 + "\n")
-    app.run(debug=True, port=port, host="0.0.0.0", threaded=True, use_reloader=False)
+    
+    # Disable werkzeug request logging completely to avoid console spam
+    # The contact status endpoint generates very long URLs that clutter the console
+    import werkzeug.serving
+    werkzeug.serving.WSGIRequestHandler.log_request = lambda *args, **kwargs: None
+    
+    app.run(debug=False, port=port, host="0.0.0.0", threaded=True, use_reloader=False)

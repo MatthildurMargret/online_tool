@@ -464,28 +464,60 @@
     Optional filters
   </label>
 
-  <select id="searchTreeLevel1"
-          onchange="updateSearchTreeLevel2()"
-          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-    <option value="">All verticals</option>
-  </select>
+  <!-- Cascading Category Menu -->
+  <div class="relative">
+    <button type="button" 
+            onclick="window.toggleCategoryMenu()"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-left flex items-center justify-between">
+      <span>Select category</span>
+      <span class="text-gray-400">▼</span>
+    </button>
+    
+    <!-- Cascading Menu Container -->
+    <div id="categoryCascadeMenu" class="hidden absolute z-20 mt-1 flex gap-1 bg-white border border-gray-300 rounded-lg shadow-xl p-2">
+      <!-- Level 1: Top Level Categories -->
+      <div id="categoryLevel1" class="w-48 border-r border-gray-200 pr-2">
+        <div class="font-semibold text-sm text-gray-700 mb-2 px-2">Top Level</div>
+        <div class="max-h-60 overflow-y-auto">
+          <label class="flex items-center p-2 hover:bg-gray-50 cursor-pointer rounded">
+            <input type="checkbox" 
+                   class="mr-2" 
+                   onchange="toggleTopLevelOption('all')"
+                   id="searchTopLevelAll">
+            <span class="text-sm">All Verticals</span>
+          </label>
+          <div id="searchTopLevelOptions" class="border-t border-gray-200 mt-1 pt-1">
+            <!-- Options will be populated here -->
+          </div>
+        </div>
+      </div>
 
-  <div id="searchTreeLevel2Container" class="hidden">
-  <select id="searchTreeLevel2"
-          onchange="updateSearchTreeLevel3()"
-          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          disabled>
-    <option value="">All</option>
-  </select>
+      <!-- Level 2: Subcategories (appears when top level is selected) -->
+      <div id="categoryLevel2" class="hidden w-48 border-r border-gray-200 pr-2">
+        <div class="font-semibold text-sm text-gray-700 mb-2 px-2">Subcategory</div>
+        <div class="max-h-60 overflow-y-auto">
+          <div id="searchSubcategoryOptions">
+            <!-- Options will be populated here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Level 3: Sub-Subcategories (appears when subcategory is selected) -->
+      <div id="categoryLevel3" class="hidden w-48">
+        <div class="font-semibold text-sm text-gray-700 mb-2 px-2">Sub-Subcategory</div>
+        <div class="max-h-60 overflow-y-auto">
+          <div id="searchSubSubcategoryOptions">
+            <!-- Options will be populated here -->
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <div id="searchTreeLevel3Container" class="hidden">
-  <select id="searchTreeLevel3"
-          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          disabled>
-    <option value="">All</option>
-  </select>
-</div>
+  <!-- Selected Categories Tags -->
+  <div id="selectedCategoriesTags" class="flex flex-wrap gap-2 mt-2 min-h-[2rem]">
+    <!-- Tags will be displayed here -->
+  </div>
 </div>
 
 
@@ -493,10 +525,46 @@
          placeholder="Keyword (e.g. company or founder)"
          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
 
-  <select id="searchLocation"
-          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-    <option value="">Location</option>
-  </select>
+  <label class="block text-sm font-medium text-gray-700 mb-1">
+    Location
+  </label>
+  <!-- Cascading Location Menu -->
+  <div class="relative">
+    <button type="button" 
+            onclick="window.toggleLocationMenu()"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-left flex items-center justify-between">
+      <span>Select location</span>
+      <span class="text-gray-400">▼</span>
+    </button>
+    
+    <!-- Cascading Menu Container -->
+    <div id="locationCascadeMenu" class="hidden absolute z-20 mt-1 flex gap-1 bg-white border border-gray-300 rounded-lg shadow-xl p-2">
+      <!-- Level 1: Countries -->
+      <div id="locationLevel1" class="w-48 border-r border-gray-200 pr-2">
+        <div class="font-semibold text-sm text-gray-700 mb-2 px-2">Country</div>
+        <div class="max-h-60 overflow-y-auto">
+          <div id="locationCountryOptions">
+            <!-- Options will be populated here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Level 2: States (appears when country is selected) -->
+      <div id="locationLevel2" class="hidden w-48">
+        <div class="font-semibold text-sm text-gray-700 mb-2 px-2">State/Region</div>
+        <div class="max-h-60 overflow-y-auto">
+          <div id="locationStateOptions">
+            <!-- Options will be populated here -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Selected Locations Tags -->
+  <div id="selectedLocationsTags" class="flex flex-wrap gap-2 mt-2 min-h-[2rem]">
+    <!-- Tags will be displayed here -->
+  </div>
 
   <input id="searchTag" type="text"
          placeholder="Tag"
@@ -953,6 +1021,22 @@ function showModule(id) {
     const API_URL = "";
     const $ = (id) => document.getElementById(id);
 
+    // Toggle category cascade menu - defined early for button onclick
+    window.toggleCategoryMenu = function() {
+      const menu = document.getElementById("categoryCascadeMenu");
+      if (menu) {
+        menu.classList.toggle("hidden");
+      }
+    };
+
+    // Toggle location cascade menu - defined early for button onclick
+    window.toggleLocationMenu = function() {
+      const menu = document.getElementById("locationCascadeMenu");
+      if (menu) {
+        menu.classList.toggle("hidden");
+      }
+    };
+
     function fmtNum(v) {
       if (v == null || isNaN(v)) return "N/A";
       if (Math.abs(v) >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
@@ -1381,6 +1465,203 @@ const FOUNDERS_API = "https://monty-api-production.up.railway.app";
 const CONTACT_STATUS_ENDPOINT = "/api/founders/contact-status";
 const contactStatusCache = new Map();
 
+// Lazy loading manager for contact status
+const contactStatusLazyLoader = {
+  observer: null,
+  pendingIds: new Set(),
+  pendingTimeout: null,
+  cardData: new Map(), // Maps entryId -> {card, row}
+  
+  init() {
+    // Load cache from localStorage on init
+    this.loadCacheFromStorage();
+    
+    // Create Intersection Observer for lazy loading
+    this.observer = new IntersectionObserver((entries) => {
+      const visibleIds = [];
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const entryId = entry.target.getAttribute('data-entry-id');
+          if (entryId && !contactStatusCache.has(entryId)) {
+            visibleIds.push(entryId);
+            this.pendingIds.add(entryId);
+          }
+        }
+      });
+      
+      // Batch fetch visible cards (debounce to avoid too many requests)
+      if (visibleIds.length > 0) {
+        clearTimeout(this.pendingTimeout);
+        this.pendingTimeout = setTimeout(() => {
+          this.fetchPending();
+        }, 100); // Wait 100ms to batch multiple visible cards
+      }
+    }, {
+      root: null,
+      rootMargin: '100px', // Start loading 100px before card is visible
+      threshold: 0.1
+    });
+  },
+  
+  // Load cache from localStorage
+  loadCacheFromStorage() {
+    try {
+      const cached = localStorage.getItem('contactStatusCache');
+      if (cached) {
+        const data = JSON.parse(cached);
+        const now = Date.now();
+        // Cache expires after 24 hours
+        const CACHE_EXPIRY = 24 * 60 * 60 * 1000;
+        
+        Object.entries(data).forEach(([key, value]) => {
+          if (value.timestamp && (now - value.timestamp) < CACHE_EXPIRY) {
+            contactStatusCache.set(key, value.data);
+          }
+        });
+      }
+    } catch (err) {
+      console.error("Failed to load contact status cache from storage", err);
+    }
+  },
+  
+  // Save cache to localStorage
+  saveCacheToStorage() {
+    try {
+      const data = {};
+      contactStatusCache.forEach((value, key) => {
+        data[key] = {
+          data: value,
+          timestamp: Date.now()
+        };
+      });
+      localStorage.setItem('contactStatusCache', JSON.stringify(data));
+    } catch (err) {
+      console.error("Failed to save contact status cache to storage", err);
+    }
+  },
+  
+  // Register a card for lazy loading
+  observeCard(card, entryId, row) {
+    if (entryId) {
+      card.setAttribute('data-entry-id', entryId);
+      this.cardData.set(entryId, { card, row });
+      
+      // If already cached, update immediately
+      if (contactStatusCache.has(entryId)) {
+        this.updateCard(entryId, contactStatusCache.get(entryId));
+      } else {
+        // Observe for lazy loading
+        this.observer.observe(card);
+      }
+    }
+  },
+  
+  // Fetch pending contact statuses
+  async fetchPending() {
+    if (this.pendingIds.size === 0) return;
+    
+    const idsToFetch = Array.from(this.pendingIds);
+    this.pendingIds.clear();
+    
+    // Filter out already cached
+    const uncached = idsToFetch.filter(id => !contactStatusCache.has(id));
+    if (uncached.length === 0) {
+      // All were cached, update cards
+      idsToFetch.forEach(id => {
+        if (contactStatusCache.has(id)) {
+          this.updateCard(id, contactStatusCache.get(id));
+        }
+      });
+      return;
+    }
+    
+    try {
+      const res = await fetch(CONTACT_STATUS_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: uncached })
+      });
+      
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          Object.entries(json.data).forEach(([key, value]) => {
+            const normalizedKey = normalizeEntryId(key);
+            if (normalizedKey) {
+              contactStatusCache.set(normalizedKey, value);
+              if (normalizedKey !== key) {
+                contactStatusCache.set(key, value);
+              }
+              if (value && typeof value === 'object') {
+                value.entry_id = normalizedKey;
+              }
+              // Update card if it exists
+              this.updateCard(normalizedKey, value);
+            }
+          });
+          
+          // Save to localStorage
+          this.saveCacheToStorage();
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching pending contact status", err);
+    }
+  },
+  
+  // Update a card with contact status
+  updateCard(entryId, status) {
+    const cardInfo = this.cardData.get(entryId);
+    if (!cardInfo) return;
+    
+    const { card, row } = cardInfo;
+    const contactStatusMap = { [entryId]: status };
+    
+    // Store the click handler before replacing innerHTML
+    const clickHandler = () => {
+      // Check if this is a dashboard card (has showModule in click handler)
+      const currentClick = card.onclick;
+      if (card.getAttribute('data-dashboard-card') === 'true') {
+        showModule('foundersModule');
+        setTimeout(() => openFounderModal(row), 100);
+      } else {
+        openFounderModal(row);
+      }
+    };
+    
+    // Re-render card with contact status
+    card.innerHTML = createFounderCardHTML(row, contactStatusMap);
+    attachContactStatusHandlers(card, row);
+    card.addEventListener("click", clickHandler);
+    
+    // Stop observing since we've loaded the status
+    this.observer.unobserve(card);
+  },
+  
+  // Clean up observer for a card
+  unobserveCard(card) {
+    this.observer.unobserve(card);
+    const entryId = card.getAttribute('data-entry-id');
+    if (entryId) {
+      this.cardData.delete(entryId);
+    }
+  },
+  
+  // Clean up all observers
+  disconnect() {
+    if (this.observer) {
+      this.observer.disconnect();
+    }
+    this.cardData.clear();
+    this.pendingIds.clear();
+  }
+};
+
+// Initialize lazy loader on page load
+if (typeof IntersectionObserver !== 'undefined') {
+  contactStatusLazyLoader.init();
+}
+
 function resolveEntryId(row) {
   /**
    * Resolve the entry ID for a founder row.
@@ -1434,98 +1715,64 @@ async function fetchContactStatuses(entryIds) {
   const ids = Array.from(new Set(entryIds.filter(Boolean).map(normalizeEntryId)));
   if (!ids.length) return {};
 
-  const uncached = ids.filter(id => !contactStatusCache.has(id));
-
-  if (uncached.length) {
-    const params = new URLSearchParams();
-    uncached.forEach(id => params.append("ids", id));
-
-    try {
-      console.log(`Fetching contact status for ${uncached.length} entry IDs:`, uncached.slice(0, 5), uncached.length > 5 ? '...' : '');
-      console.log(`API URL: ${CONTACT_STATUS_ENDPOINT}?${params.toString()}`);
-      const res = await fetch(`${CONTACT_STATUS_ENDPOINT}?${params.toString()}`);
-      if (res.ok) {
-        const json = await res.json();
-        console.log("Full API response:", json);
-        if (json.success && json.data) {
-          // Debug logging
-          const returnedKeys = Object.keys(json.data);
-          console.log(`Fetched contact status data: ${returnedKeys.length} entries returned`, returnedKeys.slice(0, 5), returnedKeys.length > 5 ? '...' : '');
-          console.log("Sample returned entry IDs:", returnedKeys.slice(0, 3));
-          console.log("Sample requested entry IDs:", uncached.slice(0, 3));
-          if (returnedKeys.length > 0) {
-            console.log("First returned entry details:", json.data[returnedKeys[0]]);
-          }
-          
-          // Normalize entry IDs from API response to ensure consistent matching
-          Object.entries(json.data).forEach(([key, value]) => {
-            const normalizedKey = normalizeEntryId(key);
-            if (normalizedKey) {
-              contactStatusCache.set(normalizedKey, value);
-              // Also store with original key if different (for fallback lookups)
-              if (normalizedKey !== key) {
-                contactStatusCache.set(key, value);
-              }
-              // Also update the entry_id in the value to be normalized for consistency
-              if (value && typeof value === 'object') {
-                value.entry_id = normalizedKey;
-              }
-            }
-          });
-        } else {
-          console.warn("Contact status API returned no data:", json);
-        }
-      } else {
-        const errorText = await res.text();
-        console.error("Failed to fetch contact status", res.status, res.statusText, errorText);
-      }
-    } catch (err) {
-      console.error("Error fetching contact status", err);
-    }
-  }
-
-  const map = {};
+  // Initialize result object with cached values
+  const result = {};
   ids.forEach(id => {
-    // Try exact match first
     if (contactStatusCache.has(id)) {
-      map[id] = contactStatusCache.get(id);
-    } else {
-      // For LinkedIn URLs, try alternative formats as fallback
-      if (id.includes('linkedin.com')) {
-        // Try with https:// prefix
-        const withHttps = `https://${id}`;
-        if (contactStatusCache.has(withHttps)) {
-          map[id] = contactStatusCache.get(withHttps);
-          // Also update cache with normalized key for future lookups
-          contactStatusCache.set(id, contactStatusCache.get(withHttps));
-        } else {
-          // Try with http:// prefix
-          const withHttp = `http://${id}`;
-          if (contactStatusCache.has(withHttp)) {
-            map[id] = contactStatusCache.get(withHttp);
-            contactStatusCache.set(id, contactStatusCache.get(withHttp));
-          } else {
-            // Try with www. prefix
-            const withWww = `www.${id}`;
-            if (contactStatusCache.has(withWww)) {
-              map[id] = contactStatusCache.get(withWww);
-              contactStatusCache.set(id, contactStatusCache.get(withWww));
-            } else {
-              // Debug: log missing entries
-              console.warn(`Contact status not found for entry_id: ${id} (tried variations: ${withHttps}, ${withHttp}, ${withWww})`);
-            }
-          }
-        }
-      } else {
-        // Debug: log missing entries for non-LinkedIn URLs
-        console.warn(`Contact status not found for entry_id: ${id}`);
-      }
+      result[id] = contactStatusCache.get(id);
     }
   });
+
+  const uncached = ids.filter(id => !contactStatusCache.has(id));
   
-  // Debug logging
-  console.log(`Contact status map built: ${Object.keys(map).length} entries found for ${ids.length} requested`);
-  return map;
+  // If all are cached, return immediately
+  if (!uncached.length) {
+    return result;
+  }
+
+  // Use POST to send all IDs in request body (avoids URL length issues)
+  // Backend handles batching internally, so we can send all at once
+  try {
+    const res = await fetch(CONTACT_STATUS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ ids: uncached })
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && json.data) {
+        // Normalize entry IDs from API response and cache them
+        Object.entries(json.data).forEach(([key, value]) => {
+          const normalizedKey = normalizeEntryId(key);
+          if (normalizedKey) {
+            contactStatusCache.set(normalizedKey, value);
+            result[normalizedKey] = value;
+            // Also store with original key if different (for fallback lookups)
+            if (normalizedKey !== key) {
+              contactStatusCache.set(key, value);
+            }
+            // Also update the entry_id in the value to be normalized for consistency
+            if (value && typeof value === 'object') {
+              value.entry_id = normalizedKey;
+            }
+          }
+        });
+        
+        // Save to localStorage after fetching
+        contactStatusLazyLoader.saveCacheToStorage();
+      }
+    } else {
+      const errorText = await res.text();
+      console.error("Failed to fetch contact status", res.status, res.statusText);
+    }
+  } catch (err) {
+    console.error("Error fetching contact status", err);
+  }
+
+  return result;
 }
 
 async function persistFounderStatus(entryId, updates = {}) {
@@ -1551,6 +1798,8 @@ async function persistFounderStatus(entryId, updates = {}) {
 
   const record = json.data || { entry_id: normalizedId, ...updates };
   contactStatusCache.set(normalizedId, record);
+  // Save to localStorage
+  contactStatusLazyLoader.saveCacheToStorage();
   return record;
 }
 
@@ -1577,7 +1826,6 @@ function syncFounderStatusUI(card, record) {
     if (statusType in record) {
       const value = record[statusType];
       toggle.checked = value === true || value === "true" || value === 1;
-      console.log(`Syncing UI: ${statusType} = ${value}, checkbox.checked = ${toggle.checked}`);
     }
   });
 
@@ -1614,12 +1862,10 @@ function attachContactStatusHandlers(card, row) {
       if (!entryId || !statusType) return;
 
       const nextValue = toggle.checked;
-      console.log(`Updating ${statusType} for ${entryId} to ${nextValue}`);
       toggle.disabled = true;
 
       try {
         const record = await persistFounderStatus(entryId, { [statusType]: nextValue });
-        console.log(`Update successful, record:`, record);
         syncFounderStatusUI(card, record);
       } catch (err) {
         console.error("Failed to persist founder status", err);
@@ -1838,24 +2084,115 @@ async function searchFounders() {
   // clear previous
   $("foundersLoading").classList.remove("hidden");
   $("searchResults").classList.add("hidden");
+  $("recommendedResults").classList.add("hidden"); // Hide recommended results when searching
   $("searchScroll").innerHTML = "";
 
   const keyword = $("searchKeyword").value.trim();
-  const location = $("searchLocation").value.trim();
-  const tree_path_prefix = getSearchSelectedTreePath();
   const tag = $("searchTag")?.value.trim() || "";
 
+  // Ensure selectedLocations is up-to-date before searching
+  populateSelectedLocations();
+
+  // Build query using URLSearchParams for proper encoding
+  // URLSearchParams handles multiple values with the same key correctly
   const query = new URLSearchParams();
-  if (keyword) query.append("keyword", keyword);
-  if (location) query.append("location", location);
-  if (tree_path_prefix) query.append("tree_path_prefix", tree_path_prefix);
-  if (tag) query.append("tag", tag);
+  
+  if (keyword) {
+    query.append("keyword", keyword);
+  }
+  
+  // Add location filters - send country/state info instead of all individual locations
+  // to avoid URL length issues (76K+ characters when sending all locations)
+  if (selectedCountries.size > 0) {
+    selectedCountries.forEach(country => {
+      const states = selectedStates.get(country) || new Set();
+      
+      if (states.size === 0) {
+        // Country selected but no states - send country as location filter
+        // The API should match locations containing this country
+        query.append("location", country);
+      } else {
+        // States selected - send state + country combinations
+        states.forEach(state => {
+          if (state === '_no_state') {
+            // For locations with no state, just send the country
+            query.append("location", country);
+          } else {
+            // Send "State, Country" format for the API to match
+            query.append("location", `${state}, ${country}`);
+          }
+        });
+      }
+    });
+  }
+  
+  // Fallback: if we have selectedLocations but no country/state selections,
+  // limit to first 100 to avoid URL length issues
+  if (selectedLocations.size > 0 && selectedCountries.size === 0) {
+    const locations = Array.from(selectedLocations).filter(Boolean).slice(0, 100);
+    locations.forEach(loc => {
+      query.append("location", loc);
+    });
+    if (selectedLocations.size > 100) {
+      console.warn(`Too many locations selected (${selectedLocations.size}). Only sending first 100.`);
+    }
+  }
+  
+  // Add multiple tree path prefixes - URLSearchParams handles encoding automatically
+  const treePathPrefixes = getSearchSelectedTreePaths();
+  if (treePathPrefixes.length > 0) {
+    treePathPrefixes.forEach(prefix => {
+      if (prefix) query.append("tree_path_prefix", prefix);
+    });
+  }
+  
+  if (tag) {
+    query.append("tag", tag);
+  }
+  
+  const queryString = query.toString();
+  
+  // Debug: log the query parameters
+  console.log("=== SEARCH DEBUG ===");
+  console.log("Selected countries:", Array.from(selectedCountries));
+  console.log("Selected states:", Object.fromEntries(selectedStates));
+  console.log("Selected locations:", Array.from(selectedLocations));
+  console.log("Selected top levels:", Array.from(selectedTopLevels));
+  console.log("Selected subcategories:", Object.fromEntries(
+    Array.from(selectedSubcategories.entries()).map(([k, v]) => [k, Array.from(v)])
+  ));
+  console.log("Tree path prefixes:", treePathPrefixes);
+  console.log("Query string:", queryString);
+  const fullUrl = queryString ? `${FOUNDERS_API}/search?${queryString}` : `${FOUNDERS_API}/search`;
+  console.log("Full API URL:", fullUrl);
+  console.log("URL length:", fullUrl.length);
+  console.log("===================");
 
   try {
-    const res = await fetch(`${FOUNDERS_API}/search?${query.toString()}`, {
+    const url = queryString ? `${FOUNDERS_API}/search?${queryString}` : `${FOUNDERS_API}/search`;
+    
+    // Check URL length (HTTP2 has limits, typically 8KB for headers)
+    if (url.length > 8000) {
+      console.error("URL too long:", url.length, "characters");
+      throw new Error("Search query is too long. Please reduce the number of filters.");
+    }
+    
+    const res = await fetch(url, {
       headers: { "x-api-key": API_KEY }
     });
-    const json = await res.json();
+    
+    // Check response status before parsing JSON
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error("API Error Response:", res.status, res.statusText, errorText);
+      throw new Error(`Search failed: ${res.status} ${res.statusText}`);
+    }
+    
+    const json = await res.json().catch(err => {
+      console.error("Failed to parse JSON response:", err);
+      throw new Error("Invalid response from server");
+    });
+    
     const data = (json.data || []).sort((a, b) => {
       const aDate = a.access_date ? new Date(a.access_date) : 0;
       const bDate = b.access_date ? new Date(b.access_date) : 0;
@@ -1870,27 +2207,34 @@ async function searchFounders() {
       return;
     }
 
-    let contactStatusMap = {};
-    try {
-      contactStatusMap = await fetchContactStatuses(data.map(resolveEntryId));
-    } catch (err) {
-      console.error("Failed to load contact status for search results", err);
-    }
-
+    // Show results immediately, lazy load contact status for visible cards
     const scroll = $("searchScroll");
+    
     for (const row of data.slice(0, 50)) {
       const card = document.createElement("div");
       card.className = "bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer transition-shadow";
-      card.innerHTML = createFounderCardHTML(row, contactStatusMap);
+      const entryId = normalizeEntryId(resolveEntryId(row));
+      
+      // Show without contact status first (will load lazily when visible)
+      card.innerHTML = createFounderCardHTML(row, {});
       attachContactStatusHandlers(card, row);
       card.addEventListener("click", () => openFounderModal(row));
       scroll.appendChild(card);
+      
+      // Register for lazy loading
+      if (contactStatusLazyLoader.observer) {
+        contactStatusLazyLoader.observeCard(card, entryId, row);
+      }
     }
 
+    // Ensure recommended results are hidden and search results are shown
+    $("recommendedResults").classList.add("hidden");
     $("searchResults").classList.remove("hidden");
   } catch (err) {
     console.error(err);
     $("foundersLoading").classList.add("hidden");
+    // Ensure recommended results are hidden even on error
+    $("recommendedResults").classList.add("hidden");
     $("searchResults").classList.remove("hidden");
     $("searchScroll").innerHTML = `<p class="text-red-500 px-4">Search failed.</p>`;
   }
@@ -1924,6 +2268,63 @@ function expandTreePrefixes(treePaths) {
   return Array.from(prefixes).sort();
 }
 
+// Parse location string and extract country and state
+function parseLocation(locationString) {
+  if (!locationString || typeof locationString !== 'string') {
+    return { country: null, state: null, original: locationString };
+  }
+  
+  const parts = locationString.split(',').map(p => p.trim()).filter(p => p);
+  
+  if (parts.length === 0) {
+    return { country: null, state: null, original: locationString };
+  }
+  
+  if (parts.length === 1) {
+    // No commas, just return the single value
+    return { country: parts[0], state: null, original: locationString };
+  }
+  
+  // Use last two parts: country (last) and state (second to last)
+  const country = parts[parts.length - 1];
+  const state = parts[parts.length - 2];
+  
+  return { country, state, original: locationString };
+}
+
+// Build location hierarchy from location strings
+function buildLocationHierarchy(locations) {
+  const hierarchy = {};
+  
+  locations.filter(Boolean).forEach(loc => {
+    const { country, state, original } = parseLocation(loc);
+    
+    if (!country) {
+      // Skip invalid locations
+      return;
+    }
+    
+    if (!hierarchy[country]) {
+      hierarchy[country] = {};
+    }
+    
+    if (state) {
+      if (!hierarchy[country][state]) {
+        hierarchy[country][state] = new Set();
+      }
+      hierarchy[country][state].add(original);
+    } else {
+      // No state, store directly under country
+      if (!hierarchy[country]['_no_state']) {
+        hierarchy[country]['_no_state'] = new Set();
+      }
+      hierarchy[country]['_no_state'].add(original);
+    }
+  });
+  
+  return hierarchy;
+}
+
 async function loadFilters() {
   try {
     const res = await fetch(`${FOUNDERS_API}/filters`, {
@@ -1933,7 +2334,12 @@ async function loadFilters() {
     const locations = json.locations || [];
     const treePaths = json.tree_paths || [];
 
-    populateSelect($("searchLocation"), locations);
+    // Build location hierarchy
+    locationHierarchy = buildLocationHierarchy(locations);
+    
+    // Populate country options
+    populateLocationCountries();
+
     buildTreeHierarchy(treePaths);
     populateTreeLevel1(); // for recommended
     populateSearchTreeLevel1(); // for search
@@ -1941,23 +2347,257 @@ async function loadFilters() {
     console.error("Failed to load filters", e);
   }
 }
+
+// Populate country options in the cascading menu
+function populateLocationCountries() {
+  const countryOptions = $("locationCountryOptions");
+  if (!countryOptions) return;
+  
+  countryOptions.innerHTML = "";
+  
+  const countries = Object.keys(locationHierarchy).sort();
+  
+  countries.forEach(country => {
+    const label = document.createElement("label");
+    label.className = "flex items-center p-2 hover:bg-gray-50 cursor-pointer rounded";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "mr-2";
+    checkbox.value = country;
+    checkbox.id = `locationCountry_${country.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    checkbox.checked = selectedCountries.has(country);
+    checkbox.onchange = () => toggleCountryOption(country);
+    label.appendChild(checkbox);
+    
+    const textNode = document.createTextNode(country);
+    label.appendChild(textNode);
+    
+    countryOptions.appendChild(label);
+  });
+  
+  updateSelectedLocationsTags();
+}
+
+// Update state options based on selected country
+function updateLocationStates() {
+  const stateContainer = $("locationLevel2");
+  const stateOptions = $("locationStateOptions");
+  
+  if (!lastClickedCountry || !selectedCountries.has(lastClickedCountry)) {
+    stateContainer.classList.add("hidden");
+    return;
+  }
+  
+  stateContainer.classList.remove("hidden");
+  
+  const states = Object.keys(locationHierarchy[lastClickedCountry] || {}).filter(s => s !== '_no_state').sort();
+  
+  if (states.length === 0) {
+    stateContainer.classList.add("hidden");
+    return;
+  }
+  
+  stateOptions.innerHTML = "";
+  
+  states.forEach(state => {
+    const label = document.createElement("label");
+    label.className = "flex items-center p-2 hover:bg-gray-50 cursor-pointer rounded";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "mr-2";
+    checkbox.value = state;
+    checkbox.id = `locationState_${state.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    checkbox.checked = selectedStates.get(lastClickedCountry)?.has(state) || false;
+    checkbox.onchange = () => toggleStateOption(state);
+    label.appendChild(checkbox);
+    
+    const textNode = document.createTextNode(state);
+    label.appendChild(textNode);
+    
+    stateOptions.appendChild(label);
+  });
+  
+  // Also add option for locations with no state
+  if (locationHierarchy[lastClickedCountry]['_no_state']) {
+    const label = document.createElement("label");
+    label.className = "flex items-center p-2 hover:bg-gray-50 cursor-pointer rounded";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "mr-2";
+    checkbox.value = '_no_state';
+    checkbox.id = `locationState_no_state`;
+    checkbox.checked = selectedStates.get(lastClickedCountry)?.has('_no_state') || false;
+    checkbox.onchange = () => toggleStateOption('_no_state');
+    label.appendChild(checkbox);
+    
+    const textNode = document.createTextNode("(No state/region)");
+    label.appendChild(textNode);
+    
+    stateOptions.appendChild(label);
+  }
+}
+
+// Toggle country option
+function toggleCountryOption(country) {
+  const checkboxId = `locationCountry_${country.replace(/[^a-zA-Z0-9]/g, "_")}`;
+  const checkbox = document.getElementById(checkboxId);
+  if (checkbox) {
+    if (checkbox.checked) {
+      selectedCountries.add(country);
+      lastClickedCountry = country;
+      // Initialize state set for this country if needed
+      if (!selectedStates.has(country)) {
+        selectedStates.set(country, new Set());
+      }
+      // Hide state menu when a new country is clicked
+      $("locationLevel2").classList.add("hidden");
+    } else {
+      selectedCountries.delete(country);
+      // Remove states for this country
+      selectedStates.delete(country);
+      // If this was the last clicked, clear it
+      if (lastClickedCountry === country) {
+        lastClickedCountry = null;
+        // Find the most recently selected country if any
+        const countriesArray = Array.from(selectedCountries);
+        lastClickedCountry = countriesArray.length > 0 ? countriesArray[countriesArray.length - 1] : null;
+      }
+    }
+  }
+  updateSelectedLocationsTags();
+  updateLocationStates();
+}
+
+// Toggle state option
+function toggleStateOption(state) {
+  if (!lastClickedCountry) return;
+  
+  const checkboxId = `locationState_${state.replace(/[^a-zA-Z0-9]/g, "_")}`;
+  const checkbox = document.getElementById(checkboxId);
+  if (checkbox) {
+    if (!selectedStates.has(lastClickedCountry)) {
+      selectedStates.set(lastClickedCountry, new Set());
+    }
+    
+    if (checkbox.checked) {
+      selectedStates.get(lastClickedCountry).add(state);
+    } else {
+      selectedStates.get(lastClickedCountry).delete(state);
+    }
+  }
+  updateSelectedLocationsTags();
+}
+
+// Populate selectedLocations from current country/state selections
+function populateSelectedLocations() {
+  selectedLocations.clear();
+  
+  selectedCountries.forEach(country => {
+    const states = selectedStates.get(country) || new Set();
+    
+    if (states.size === 0) {
+      // Country selected but no states - add all locations for this country
+      const countryData = locationHierarchy[country] || {};
+      Object.values(countryData).forEach(locationSet => {
+        locationSet.forEach(loc => selectedLocations.add(loc));
+      });
+    } else {
+      // States selected - add locations for those states
+      states.forEach(state => {
+        const locationSet = locationHierarchy[country]?.[state];
+        if (locationSet) {
+          locationSet.forEach(loc => selectedLocations.add(loc));
+        }
+      });
+    }
+  });
+}
+
+// Update selected locations tags display
+function updateSelectedLocationsTags() {
+  const tagsContainer = $("selectedLocationsTags");
+  if (!tagsContainer) return;
+  
+  tagsContainer.innerHTML = "";
+  
+  // Populate selectedLocations from current selections
+  populateSelectedLocations();
+  
+  // Display tags for selected countries and states
+  selectedCountries.forEach(country => {
+    const states = selectedStates.get(country) || new Set();
+    
+    if (states.size === 0) {
+      // Show country tag
+      const tag = document.createElement("span");
+      tag.className = "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800";
+      tag.textContent = country;
+      
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "ml-1 text-blue-600 hover:text-blue-800";
+      removeBtn.innerHTML = "×";
+      removeBtn.onclick = () => {
+        selectedCountries.delete(country);
+        selectedStates.delete(country);
+        if (lastClickedCountry === country) {
+          lastClickedCountry = null;
+          const countriesArray = Array.from(selectedCountries);
+          lastClickedCountry = countriesArray.length > 0 ? countriesArray[countriesArray.length - 1] : null;
+        }
+        populateLocationCountries();
+        updateLocationStates();
+        updateSelectedLocationsTags();
+      };
+      tag.appendChild(removeBtn);
+      tagsContainer.appendChild(tag);
+    } else {
+      // Show state tags
+      states.forEach(state => {
+        const tag = document.createElement("span");
+        tag.className = "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800";
+        const stateLabel = state === '_no_state' ? '(No state/region)' : state;
+        tag.textContent = `${country} > ${stateLabel}`;
+        
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "ml-1 text-blue-600 hover:text-blue-800";
+        removeBtn.innerHTML = "×";
+        removeBtn.onclick = () => {
+          selectedStates.get(country)?.delete(state);
+          if (selectedStates.get(country)?.size === 0) {
+            selectedStates.delete(country);
+          }
+          updateLocationStates();
+          updateSelectedLocationsTags();
+        };
+        tag.appendChild(removeBtn);
+        tagsContainer.appendChild(tag);
+      });
+    }
+  });
+}
+
 function populateSearchTreeLevel1() {
   const allowedTopLevels = ["AI", "Fintech", "Healthcare", "Commerce", "Other"];
-  const l1Sel = $("searchTreeLevel1");
-  l1Sel.innerHTML = "<option value=''>All Top Categories</option>";
+  const topLevelOptions = $("searchTopLevelOptions");
+  if (!topLevelOptions) return;
 
+  topLevelOptions.innerHTML = "";
   const validKeys = Object.keys(treeHierarchy)
     .filter(k => allowedTopLevels.includes(k));
 
-  for (const k of validKeys.sort()) {
-    const opt = document.createElement("option");
-    opt.value = k;
-    opt.textContent = k;
-    l1Sel.appendChild(opt);
-  }
-
-  $("searchTreeLevel2").disabled = true;
-  $("searchTreeLevel3").disabled = true;
+  validKeys.sort().forEach(k => {
+    const label = document.createElement("label");
+    label.className = "flex items-center p-2 hover:bg-gray-50 cursor-pointer rounded";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "mr-2";
+    checkbox.value = k;
+    checkbox.id = `searchTopLevel_${k.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    checkbox.onchange = () => toggleTopLevelOption(k);
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(k));
+    topLevelOptions.appendChild(label);
+  });
 }
 
 
@@ -2048,69 +2688,155 @@ function updateTreeLevel3() {
 }
 
 function updateSearchTreeLevel2() {
-  const l1 = $("searchTreeLevel1").value;
-  const l2Sel = $("searchTreeLevel2");
-  const l3Sel = $("searchTreeLevel3");
-  const l2Container = $("searchTreeLevel2Container");
-  const l3Container = $("searchTreeLevel3Container");
+  const l2Container = $("categoryLevel2");
+  const l3Container = $("categoryLevel3");
+  const subcategoryOptions = $("searchSubcategoryOptions");
+  const subSubcategoryOptions = $("searchSubSubcategoryOptions");
 
-  // reset
-  l2Sel.innerHTML = "<option value=''>All Subcategories</option>";
-  l3Sel.innerHTML = "<option value=''>All Sub-Subcategories</option>";
-  l3Sel.disabled = true;
+  // Clear sub-subcategory display
+  subSubcategoryOptions.innerHTML = "";
   l3Container.classList.add("hidden");
 
-  if (!l1) {
-    l2Sel.disabled = true;
+  // Only show subcategories for the last clicked top-level category
+  if (!lastClickedTopLevel || !selectedTopLevels.has(lastClickedTopLevel)) {
     l2Container.classList.add("hidden");
     return;
   }
 
-  const subs = Object.keys(treeHierarchy[l1] || {});
-  l2Sel.disabled = !subs.length;
-  l2Container.classList.toggle("hidden", !subs.length);
+  l2Container.classList.remove("hidden");
 
-  for (const s of subs.sort()) {
-    const opt = document.createElement("option");
-    opt.value = s;
-    opt.textContent = s;
-    l2Sel.appendChild(opt);
+  // Get subcategories only for the last clicked top-level category
+  const subs = Object.keys(treeHierarchy[lastClickedTopLevel] || {});
+
+  if (subs.length === 0) {
+    l2Container.classList.add("hidden");
+    return;
   }
+
+  // Populate subcategory checkboxes
+  subcategoryOptions.innerHTML = "";
+  subs.sort().forEach(sub => {
+    const label = document.createElement("label");
+    label.className = "flex items-center p-2 hover:bg-gray-50 cursor-pointer rounded";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "mr-2";
+    checkbox.value = sub;
+    checkbox.id = `searchSubcategory_${sub.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    
+    // Check if this subcategory is selected for this top level
+    const isChecked = selectedSubcategories.get(lastClickedTopLevel)?.has(sub) || false;
+    checkbox.checked = isChecked;
+    
+    checkbox.onchange = () => toggleSubcategoryOption(sub);
+    label.appendChild(checkbox);
+    
+    const textNode = document.createTextNode(sub);
+    label.appendChild(textNode);
+    
+    subcategoryOptions.appendChild(label);
+  });
+
+  updateSearchTreeLevel3();
 }
 
 function updateSearchTreeLevel3() {
-  const l1 = $("searchTreeLevel1").value;
-  const l2 = $("searchTreeLevel2").value;
-  const l3Sel = $("searchTreeLevel3");
-  const l3Container = $("searchTreeLevel3Container");
+  const l3Container = $("categoryLevel3");
+  const subSubcategoryOptions = $("searchSubSubcategoryOptions");
 
-  l3Sel.innerHTML = "<option value=''>All Sub-Subcategories</option>";
-
-  if (!l2) {
-    l3Sel.disabled = true;
+  // Only show sub-subcategories for the last clicked top-level category
+  if (!lastClickedTopLevel) {
     l3Container.classList.add("hidden");
     return;
   }
 
-  const subs = Object.keys(treeHierarchy[l1]?.[l2] || {});
-  l3Sel.disabled = !subs.length;
-  l3Container.classList.toggle("hidden", !subs.length);
-
-  for (const s of subs.sort()) {
-    const opt = document.createElement("option");
-    opt.value = s;
-    opt.textContent = s;
-    l3Sel.appendChild(opt);
+  // Get selected subcategories for the last clicked top-level category
+  const subs = selectedSubcategories.get(lastClickedTopLevel) || new Set();
+  
+  if (subs.size === 0) {
+    l3Container.classList.add("hidden");
+    return;
   }
+
+  l3Container.classList.remove("hidden");
+
+  // Collect all sub-subcategories from selected subcategories of the last clicked top level
+  const allSubSubs = new Set();
+  subs.forEach(sub => {
+    const subSubs = Object.keys(treeHierarchy[lastClickedTopLevel]?.[sub] || {});
+    subSubs.forEach(subSub => allSubSubs.add(subSub));
+  });
+
+  if (allSubSubs.size === 0) {
+    l3Container.classList.add("hidden");
+    return;
+  }
+
+  // Populate sub-subcategory checkboxes
+  subSubcategoryOptions.innerHTML = "";
+  Array.from(allSubSubs).sort().forEach(subSub => {
+    const label = document.createElement("label");
+    label.className = "flex items-center p-2 hover:bg-gray-50 cursor-pointer rounded";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "mr-2";
+    checkbox.value = subSub;
+    checkbox.id = `searchSubSubcategory_${subSub.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    
+    // Check if this sub-subcategory is selected for any selected subcategory of the last clicked top level
+    let isChecked = false;
+    subs.forEach(sub => {
+      if (selectedSubSubcategories.get(lastClickedTopLevel)?.get(sub)?.has(subSub)) {
+        isChecked = true;
+      }
+    });
+    checkbox.checked = isChecked;
+    
+    checkbox.onchange = () => toggleSubSubcategoryOption(subSub);
+    label.appendChild(checkbox);
+    
+    const textNode = document.createTextNode(subSub);
+    label.appendChild(textNode);
+    
+    subSubcategoryOptions.appendChild(label);
+  });
+
 }
 
 function getSearchSelectedTreePath() {
-  const parts = [
-    $("searchTreeLevel1").value,
-    $("searchTreeLevel2").value,
-    $("searchTreeLevel3").value
-  ].filter(Boolean);
-  return parts.join(" > ");
+  // Legacy function for backward compatibility - returns first path or empty
+  const paths = getSearchSelectedTreePaths();
+  return paths.length > 0 ? paths[0] : "";
+}
+
+function getSearchSelectedTreePaths() {
+  const paths = [];
+  
+  selectedTopLevels.forEach(topLevel => {
+    const subs = selectedSubcategories.get(topLevel) || new Set();
+    const subSubs = selectedSubSubcategories.get(topLevel) || new Map();
+    
+    if (subs.size === 0) {
+      // Just top level selected - send as prefix (will match all children)
+      paths.push(topLevel);
+    } else {
+      subs.forEach(sub => {
+        const subSubSet = subSubs.get(sub) || new Set();
+        if (subSubSet.size === 0) {
+          // Top level + subcategory selected - send as prefix (will match all sub-subcategories)
+          paths.push(`${topLevel} > ${sub}`);
+        } else {
+          // Top level + subcategory + sub-subcategory selected
+          // Send the most specific path - API should do prefix matching
+          subSubSet.forEach(subSub => {
+            paths.push(`${topLevel} > ${sub} > ${subSub}`);
+          });
+        }
+      });
+    }
+  });
+  
+  return paths;
 }
 
 
@@ -2136,13 +2862,6 @@ function createFounderCardHTML(row, contactStatusMap = {}) {
   const rawEntryId = resolveEntryId(row);
   const entryId = normalizeEntryId(rawEntryId);
   const status = entryId ? (contactStatusMap[entryId] || contactStatusCache.get(entryId)) : undefined;
-  
-  // Debug logging for status resolution
-  if (entryId && !status) {
-    console.debug(`No status found for entryId: ${entryId} (raw: ${rawEntryId})`);
-    console.debug(`Row data - entry_id: ${row.entry_id}, profile_url: ${row.profile_url}`);
-    console.debug(`Available keys in map:`, Object.keys(contactStatusMap).slice(0, 5));
-  }
   
   const isContacted = status ? Boolean(status.contacted) : false;
   const isInPipeline = status ? Boolean(status.in_pipeline) : false;
@@ -2263,21 +2982,23 @@ async function loadRecommendedFiltered() {
       return;
     }
 
-    let contactStatusMap = {};
-    try {
-      contactStatusMap = await fetchContactStatuses(data.map(resolveEntryId));
-    } catch (err) {
-      console.error("Failed to load contact status for recommendations", err);
-    }
-
+    // Show results immediately, lazy load contact status for visible cards
     const scroll = $("recommendedScroll");
     for (const row of data.slice(0, 50)) {
       const card = document.createElement("div");
       card.className = "bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer transition-shadow";
-      card.innerHTML = createFounderCardHTML(row, contactStatusMap);
+      const entryId = normalizeEntryId(resolveEntryId(row));
+      
+      // Show without contact status first (will load lazily when visible)
+      card.innerHTML = createFounderCardHTML(row, {});
       attachContactStatusHandlers(card, row);
       card.addEventListener("click", () => openFounderModal(row));
       scroll.appendChild(card);
+      
+      // Register for lazy loading
+      if (contactStatusLazyLoader.observer) {
+        contactStatusLazyLoader.observeCard(card, entryId, row);
+      }
     }
 
     $("recommendedResults").classList.remove("hidden");
@@ -2319,16 +3040,17 @@ async function loadDashboardRecommendations() {
     // Show only top 5
     const top5 = data.slice(0, 5);
 
-    let contactStatusMap = {};
-    try {
-      contactStatusMap = await fetchContactStatuses(top5.map(resolveEntryId));
-    } catch (err) {
-      console.error("Failed to load contact status for dashboard", err);
-    }
-
+    // For dashboard (only 5 items), use lazy loading but check cache first
     top5.forEach((row) => {
       const card = document.createElement("div");
       card.className = "bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer transition-shadow";
+      const entryId = normalizeEntryId(resolveEntryId(row));
+      
+      // Use cached status if available, otherwise will load lazily
+      const contactStatusMap = contactStatusCache.has(entryId) 
+        ? { [entryId]: contactStatusCache.get(entryId) } 
+        : {};
+      
       card.innerHTML = createFounderCardHTML(row, contactStatusMap);
       attachContactStatusHandlers(card, row);
       card.addEventListener("click", () => {
@@ -2337,6 +3059,12 @@ async function loadDashboardRecommendations() {
         setTimeout(() => openFounderModal(row), 100);
       });
       listEl.appendChild(card);
+      
+      // Mark as dashboard card and register for lazy loading if not cached
+      card.setAttribute('data-dashboard-card', 'true');
+      if (!contactStatusCache.has(entryId) && contactStatusLazyLoader.observer) {
+        contactStatusLazyLoader.observeCard(card, entryId, row);
+      }
     });
 
   } catch (err) {
@@ -2460,6 +3188,8 @@ function showTab(tab) {
     if ($("recommendedScroll").children.length === 0) loadRecommendedFiltered();
   } else {
     $("searchPanel")?.classList.remove("hidden");
+    // Always hide recommended results when on search tab
+    $("recommendedResults").classList.add("hidden");
     const hasResults = $("searchScroll").children.length > 0;
     $("searchResults").classList.toggle("hidden", !hasResults);
   }
@@ -2468,6 +3198,19 @@ function showTab(tab) {
 // Multi-select state
 let selectedCategories = new Set();
 let selectedFundingRounds = new Set();
+
+// Search multi-select state
+let selectedTopLevels = new Set();
+let selectedSubcategories = new Map(); // Map of topLevel -> Set of subcategories
+let selectedSubSubcategories = new Map(); // Map of topLevel -> Map of subcategory -> Set of subSubcategories
+let selectedLocations = new Set();
+let lastClickedTopLevel = null; // Track the most recently clicked top-level category
+
+// Location hierarchy state
+let locationHierarchy = {}; // Map of country -> Map of state -> Set of location strings
+let selectedCountries = new Set();
+let selectedStates = new Map(); // Map of country -> Set of states
+let lastClickedCountry = null; // Track the most recently clicked country
 
 // Toggle multi-select dropdown
 function toggleMultiSelect(type) {
@@ -2487,6 +3230,9 @@ function toggleMultiSelect(type) {
 document.addEventListener("click", (e) => {
   const categoryDropdown = $("dealCategoryDropdown");
   const fundingDropdown = $("dealFundingRoundDropdown");
+  const subcategoryDropdown = $("searchSubcategoryDropdown");
+  const subSubcategoryDropdown = $("searchSubSubcategoryDropdown");
+  const locationDropdown = $("searchLocationDropdown");
   
   // Check if click is outside category dropdown and its button
   if (categoryDropdown && !categoryDropdown.contains(e.target) && 
@@ -2498,6 +3244,46 @@ document.addEventListener("click", (e) => {
   if (fundingDropdown && !fundingDropdown.contains(e.target) && 
       !e.target.closest("button[onclick*='dealFundingRound']")) {
     fundingDropdown.classList.add("hidden");
+  }
+  
+  const topLevelDropdown = $("searchTopLevelDropdown");
+  
+  // Check if click is outside search top level dropdown and its button
+  if (topLevelDropdown && !topLevelDropdown.contains(e.target) && 
+      !e.target.closest("button[onclick*='searchTopLevel']")) {
+    topLevelDropdown.classList.add("hidden");
+  }
+  
+  // Check if click is outside search subcategory dropdown and its button
+  if (subcategoryDropdown && !subcategoryDropdown.contains(e.target) && 
+      !e.target.closest("button[onclick*='searchSubcategory']")) {
+    subcategoryDropdown.classList.add("hidden");
+  }
+  
+  // Check if click is outside search sub-subcategory dropdown and its button
+  if (subSubcategoryDropdown && !subSubcategoryDropdown.contains(e.target) && 
+      !e.target.closest("button[onclick*='searchSubSubcategory']")) {
+    subSubcategoryDropdown.classList.add("hidden");
+  }
+  
+  // Check if click is outside search location dropdown and its button
+  if (locationDropdown && !locationDropdown.contains(e.target) && 
+      !e.target.closest("button[onclick*='searchLocation']")) {
+    locationDropdown.classList.add("hidden");
+  }
+  
+  // Check if click is outside category cascade menu and its button
+  const categoryCascadeMenu = $("categoryCascadeMenu");
+  if (categoryCascadeMenu && !categoryCascadeMenu.contains(e.target) && 
+      !e.target.closest("button[onclick*='toggleCategoryMenu']")) {
+    categoryCascadeMenu.classList.add("hidden");
+  }
+  
+  // Check if click is outside location cascade menu and its button
+  const locationCascadeMenu = $("locationCascadeMenu");
+  if (locationCascadeMenu && !locationCascadeMenu.contains(e.target) && 
+      !e.target.closest("button[onclick*='toggleLocationMenu']")) {
+    locationCascadeMenu.classList.add("hidden");
   }
 });
 
@@ -2596,6 +3382,263 @@ function updateFundingRoundDisplay() {
     display.textContent = `${selectedFundingRounds.size} selected`;
   }
 }
+
+// Toggle search multi-select dropdown (for location)
+function toggleSearchMultiSelect(type) {
+  const dropdown = $(type + "Dropdown");
+  if (dropdown) {
+    dropdown.classList.toggle("hidden");
+    // Close other search dropdowns
+    const allSearchDropdowns = ["searchLocationDropdown"];
+    allSearchDropdowns.forEach(dd => {
+      if (dd !== type + "Dropdown") {
+        $(dd)?.classList.add("hidden");
+      }
+    });
+  }
+}
+
+// Toggle top-level category option
+function toggleTopLevelOption(value) {
+  if (value === "all") {
+    const allChecked = $("searchTopLevelAll").checked;
+    selectedTopLevels.clear();
+    selectedSubcategories.clear();
+    selectedSubSubcategories.clear();
+    lastClickedTopLevel = null;
+    if (allChecked) {
+      // Select all top-level categories
+      document.querySelectorAll("#searchTopLevelOptions input[type='checkbox']").forEach(cb => {
+        if (cb.id !== "searchTopLevelAll") {
+          cb.checked = true;
+          selectedTopLevels.add(cb.value);
+        }
+      });
+    } else {
+      // Unselect all
+      document.querySelectorAll("#searchTopLevelOptions input[type='checkbox']").forEach(cb => {
+        cb.checked = false;
+      });
+    }
+    // Hide level 2 and 3 when unselecting all
+    $("categoryLevel2").classList.add("hidden");
+    $("categoryLevel3").classList.add("hidden");
+  } else {
+    const checkboxId = `searchTopLevel_${value.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    const checkbox = document.getElementById(checkboxId);
+    if (checkbox) {
+      if (checkbox.checked) {
+        selectedTopLevels.add(value);
+        // Track this as the last clicked top-level category
+        lastClickedTopLevel = value;
+        // Initialize subcategory set for this top level if needed
+        if (!selectedSubcategories.has(value)) {
+          selectedSubcategories.set(value, new Set());
+        }
+        // Uncheck "All" if a specific option is selected
+        $("searchTopLevelAll").checked = false;
+        // Hide sub-subcategories when a new top-level is clicked
+        $("categoryLevel3").classList.add("hidden");
+      } else {
+        selectedTopLevels.delete(value);
+        // Remove subcategories for this top level
+        selectedSubcategories.delete(value);
+        selectedSubSubcategories.delete(value);
+        // If this was the last clicked, clear it
+        if (lastClickedTopLevel === value) {
+          lastClickedTopLevel = null;
+          // Find the most recently selected top-level if any
+          const topLevelsArray = Array.from(selectedTopLevels);
+          lastClickedTopLevel = topLevelsArray.length > 0 ? topLevelsArray[topLevelsArray.length - 1] : null;
+        }
+      }
+    }
+  }
+  updateSelectedCategoriesTags();
+  updateSearchTreeLevel2();
+}
+
+
+// Update selected categories tags display
+function updateSelectedCategoriesTags() {
+  const tagsContainer = $("selectedCategoriesTags");
+  if (!tagsContainer) return;
+  
+  tagsContainer.innerHTML = "";
+  
+  // Build a flat list of all selected category paths
+  const allPaths = [];
+  
+  selectedTopLevels.forEach(topLevel => {
+    const subs = selectedSubcategories.get(topLevel) || new Set();
+    const subSubs = selectedSubSubcategories.get(topLevel) || new Map();
+    
+    if (subs.size === 0) {
+      // Just top level selected
+      allPaths.push({ path: topLevel, fullPath: topLevel, level: 1 });
+    } else {
+      subs.forEach(sub => {
+        const subSubSet = subSubs.get(sub) || new Set();
+        if (subSubSet.size === 0) {
+          // Top level + subcategory
+          allPaths.push({ path: `${topLevel} > ${sub}`, fullPath: `${topLevel} > ${sub}`, level: 2, topLevel, sub });
+        } else {
+          // Top level + subcategory + sub-subcategory
+          subSubSet.forEach(subSub => {
+            allPaths.push({ path: `${topLevel} > ${sub} > ${subSub}`, fullPath: `${topLevel} > ${sub} > ${subSub}`, level: 3, topLevel, sub, subSub });
+          });
+        }
+      });
+    }
+  });
+  
+  // Display tags
+  allPaths.forEach(({ fullPath, level, topLevel, sub, subSub }) => {
+    const tag = document.createElement("div");
+    tag.className = "inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-sm";
+    
+    const span = document.createElement("span");
+    span.textContent = fullPath;
+    tag.appendChild(span);
+    
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ml-1 text-blue-700 hover:text-blue-900 font-bold";
+    button.textContent = "×";
+    button.onclick = () => removeCategoryTag(topLevel, sub || null, subSub || null);
+    tag.appendChild(button);
+    
+    tagsContainer.appendChild(tag);
+  });
+}
+
+// Remove a category tag
+function removeCategoryTag(topLevel, sub, subSub) {
+  if (subSub !== null && subSub !== undefined) {
+    // Remove sub-subcategory
+    const subSubMap = selectedSubSubcategories.get(topLevel);
+    if (subSubMap) {
+      const subSubSet = subSubMap.get(sub);
+      if (subSubSet) {
+        subSubSet.delete(subSub);
+        if (subSubSet.size === 0) {
+          subSubMap.delete(sub);
+        }
+        // Also uncheck the checkbox
+        const checkboxId = `searchSubSubcategory_${subSub.replace(/[^a-zA-Z0-9]/g, "_")}`;
+        const checkbox = document.getElementById(checkboxId);
+        if (checkbox) {
+          // Check if this sub-subcategory is still selected elsewhere
+          let stillSelected = false;
+          selectedTopLevels.forEach(tl => {
+            const ssMap = selectedSubSubcategories.get(tl);
+            if (ssMap) {
+              ssMap.forEach((ssSet, s) => {
+                if (ssSet.has(subSub)) stillSelected = true;
+              });
+            }
+          });
+          if (!stillSelected) checkbox.checked = false;
+        }
+      }
+      if (subSubMap.size === 0) {
+        selectedSubSubcategories.delete(topLevel);
+      }
+    }
+  } else if (sub !== null && sub !== undefined) {
+    // Remove subcategory (and all its sub-subcategories)
+    selectedSubcategories.get(topLevel)?.delete(sub);
+    selectedSubSubcategories.get(topLevel)?.delete(sub);
+    // Uncheck the checkbox
+    const checkboxId = `searchSubcategory_${sub.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    const checkbox = document.getElementById(checkboxId);
+    if (checkbox) {
+      // Check if this subcategory is still selected elsewhere
+      let stillSelected = false;
+      selectedTopLevels.forEach(tl => {
+        if (selectedSubcategories.get(tl)?.has(sub)) stillSelected = true;
+      });
+      if (!stillSelected) checkbox.checked = false;
+    }
+  } else {
+    // Remove top level (and all its subcategories)
+    selectedTopLevels.delete(topLevel);
+    selectedSubcategories.delete(topLevel);
+    selectedSubSubcategories.delete(topLevel);
+    // Uncheck the checkbox
+    const checkboxId = `searchTopLevel_${topLevel.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    const checkbox = document.getElementById(checkboxId);
+    if (checkbox) checkbox.checked = false;
+  }
+  
+  updateSelectedCategoriesTags();
+  updateSearchTreeLevel2();
+  updateSearchTreeLevel3();
+}
+
+// Toggle subcategory option
+function toggleSubcategoryOption(value) {
+  const checkboxId = `searchSubcategory_${value.replace(/[^a-zA-Z0-9]/g, "_")}`;
+  const checkbox = document.getElementById(checkboxId);
+  if (checkbox && lastClickedTopLevel) {
+    if (checkbox.checked) {
+      // Add this subcategory to the last clicked top level
+      if (!selectedSubcategories.has(lastClickedTopLevel)) {
+        selectedSubcategories.set(lastClickedTopLevel, new Set());
+      }
+      selectedSubcategories.get(lastClickedTopLevel).add(value);
+    } else {
+      // Remove this subcategory from the last clicked top level
+      selectedSubcategories.get(lastClickedTopLevel)?.delete(value);
+      selectedSubSubcategories.get(lastClickedTopLevel)?.delete(value);
+    }
+  }
+  updateSelectedCategoriesTags();
+  // Update sub-subcategories when subcategory changes
+  updateSearchTreeLevel3();
+}
+
+// Toggle sub-subcategory option
+function toggleSubSubcategoryOption(value) {
+  const checkboxId = `searchSubSubcategory_${value.replace(/[^a-zA-Z0-9]/g, "_")}`;
+  const checkbox = document.getElementById(checkboxId);
+  if (checkbox && lastClickedTopLevel) {
+    const subs = selectedSubcategories.get(lastClickedTopLevel) || new Set();
+    if (checkbox.checked) {
+      // Add this sub-subcategory to all selected subcategories of the last clicked top level
+      subs.forEach(sub => {
+        if (treeHierarchy[lastClickedTopLevel]?.[sub]?.[value]) {
+          if (!selectedSubSubcategories.has(lastClickedTopLevel)) {
+            selectedSubSubcategories.set(lastClickedTopLevel, new Map());
+          }
+          const subSubMap = selectedSubSubcategories.get(lastClickedTopLevel);
+          if (!subSubMap.has(sub)) {
+            subSubMap.set(sub, new Set());
+          }
+          subSubMap.get(sub).add(value);
+        }
+      });
+    } else {
+      // Remove this sub-subcategory from all subcategories of the last clicked top level
+      const subSubMap = selectedSubSubcategories.get(lastClickedTopLevel);
+      if (subSubMap) {
+        subSubMap.forEach((subSubSet, sub) => {
+          subSubSet.delete(value);
+          if (subSubSet.size === 0) {
+            subSubMap.delete(sub);
+          }
+        });
+        if (subSubMap.size === 0) {
+          selectedSubSubcategories.delete(lastClickedTopLevel);
+        }
+      }
+    }
+  }
+  updateSelectedCategoriesTags();
+}
+
+// Toggle location option
+// Old toggleLocationOption and updateLocationDisplay functions removed - replaced with cascading menu
 
 // Load deals filters (categories and funding rounds)
 async function loadDealsFilters() {
@@ -3333,10 +4376,6 @@ async function searchProspects() {
     // Display results
     $("prospectingLoading").classList.add("hidden");
     displayProspectingResults(currentProspectingResults);
-    
-    // Log query for debugging
-    console.log("Search query:", data.query);
-    console.log("Results count:", currentProspectingResults.length);
 
   } catch (err) {
     console.error("Prospecting search error:", err);
@@ -3397,9 +4436,6 @@ function displayProspectingResults(results) {
   });
 
   $("prospectingResults").classList.remove("hidden");
-  
-  // Log to console for debugging
-  console.log(`Displayed ${results.length} results`);
 }
 
 // ============================================================================
