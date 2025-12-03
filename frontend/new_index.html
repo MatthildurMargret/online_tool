@@ -237,6 +237,11 @@
             onclick="showModule('interestingPeopleModule')">
       Interesting People
     </button>
+    <button id="btn-tasteTreeModule"
+            class="sidebar-btn text-left py-3 px-4 rounded"
+            onclick="showModule('tasteTreeModule')">
+      Team Preferences
+    </button>
     <button id="btn-prospectingModule"
             class="sidebar-btn text-left py-3 px-4 rounded"
             onclick="showModule('prospectingModule')">
@@ -571,6 +576,145 @@
       </div>
     </div>
 
+    <!-- Taste Tree Module -->
+    <div id="tasteTreeModule" class="hidden">
+      <div class="module-card rounded-xl w-full p-6 space-y-4">
+        <div class="mb-4">
+          <h2 class="text-2xl font-bold text-brand mb-2">Team Interests Management</h2>
+          <p class="text-gray-600 text-sm">
+            Manage which categories are of interest to each user.
+          </p>
+        </div>
+
+        <!-- Loading indicator -->
+        <div id="tasteTreeLoading" class="hidden text-center py-4">
+          <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <p class="text-sm text-gray-600 mt-2">Loading...</p>
+        </div>
+
+        <!-- Error message -->
+        <div id="tasteTreeError" class="hidden text-center py-4">
+          <p class="text-red-500 text-sm"></p>
+        </div>
+
+        <!-- Two-panel layout -->
+        <div id="tasteTreeContent" class="hidden flex gap-6" style="min-height: 600px;">
+          <!-- Left Panel: Users List -->
+          <div class="w-1/3 border border-gray-200 rounded-lg p-4 bg-gray-50">
+            <div class="mb-4">
+              <h3 class="font-semibold text-brand mb-2">Users</h3>
+              <input
+                type="text"
+                id="userSearchInput"
+                placeholder="Search users..."
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                oninput="filterUsers()"
+              />
+            </div>
+            <div id="usersList" class="overflow-y-auto max-h-[550px] space-y-2">
+              <!-- Users will be rendered here -->
+            </div>
+          </div>
+
+          <!-- Right Panel: User Tags Management -->
+          <div class="flex-1 border border-gray-200 rounded-lg p-6 bg-white">
+            <div id="noUserSelected" class="text-center py-12 text-gray-500">
+              <p class="text-lg mb-2">Select a user from the left panel</p>
+              <p class="text-sm">to view and manage their category tags</p>
+            </div>
+
+            <div id="userTagsPanel" class="hidden">
+              <!-- User Header -->
+              <div class="mb-6 pb-4 border-b border-gray-200">
+                <h3 id="selectedUserName" class="text-xl font-bold text-brand mb-1"></h3>
+                <p id="selectedUserTagCount" class="text-sm text-gray-600"></p>
+              </div>
+
+              <!-- Current Tags Section -->
+              <div class="mb-6">
+                <h4 class="font-semibold text-gray-700 mb-3">Current Tags</h4>
+                <div id="currentTagsList" class="flex flex-wrap gap-2 min-h-[60px] p-3 border border-gray-200 rounded-lg bg-gray-50">
+                  <!-- Tags will be rendered here -->
+                </div>
+              </div>
+
+              <!-- Search and Add Tags Section -->
+              <div class="mb-6">
+                <h4 class="font-semibold text-gray-700 mb-3">Add Tags</h4>
+                
+                <!-- Tabs for Search vs Browse -->
+                <div class="flex gap-2 mb-3 border-b border-gray-200">
+                  <button
+                    id="searchTabBtn"
+                    onclick="switchTagMode('search')"
+                    class="px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600"
+                  >
+                    Search
+                  </button>
+                  <button
+                    id="browseTabBtn"
+                    onclick="switchTagMode('browse')"
+                    class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600 hover:text-gray-800"
+                  >
+                    Browse
+                  </button>
+                </div>
+
+                <!-- Search Mode -->
+                <div id="searchMode" class="tag-mode">
+                  <input
+                    type="text"
+                    id="tagSearchInput"
+                    placeholder="Search categories..."
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+                    oninput="searchCategories()"
+                  />
+                  <div id="tagSearchResults" class="max-h-[300px] overflow-y-auto border border-gray-200 rounded-lg hidden">
+                    <!-- Search results will be rendered here -->
+                  </div>
+                </div>
+
+                <!-- Browse Mode -->
+                <div id="browseMode" class="tag-mode hidden">
+                  <div class="mb-3">
+                    <input
+                      type="text"
+                      id="browseFilterInput"
+                      placeholder="Filter categories..."
+                      class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      oninput="filterBrowseTree()"
+                    />
+                  </div>
+                  <div id="categoryBrowseTree" class="max-h-[300px] overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
+                    <!-- Category tree will be rendered here -->
+                  </div>
+                </div>
+              </div>
+
+              <!-- Pending Changes Indicator -->
+              <div id="pendingChangesIndicator" class="hidden mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p class="text-sm text-yellow-800">
+                  <span id="pendingChangesCount">0</span> changes pending
+                </p>
+              </div>
+
+              <!-- Save Button -->
+              <div class="flex justify-end">
+                <button
+                  id="saveUserChangesBtn"
+                  onclick="saveUserChanges()"
+                  disabled
+                  class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Prospecting Module -->
     <div id="prospectingModule" class="hidden">
       <div class="module-card rounded-xl w-full p-6 space-y-4">
@@ -760,7 +904,7 @@ function closeSidebarMobile() {
 }
 
 function showModule(id) {
-  ["welcomeModule", "valuationModule", "foundersModule", "dealsModule", "interestingPeopleModule", "prospectingModule"].forEach(m =>
+  ["welcomeModule", "valuationModule", "foundersModule", "dealsModule", "interestingPeopleModule", "tasteTreeModule", "prospectingModule"].forEach(m =>
     document.getElementById(m).classList.add("hidden")
   );
   document.getElementById(id).classList.remove("hidden");
@@ -786,6 +930,11 @@ function showModule(id) {
   // Load deals when showing deals module
   if (id === "dealsModule") {
     loadDealsFilters().then(() => loadDeals());
+  }
+  
+  // Load taste tree when showing taste tree module
+  if (id === "tasteTreeModule") {
+    loadTasteTree();
   }
   
   // Load interesting people when showing interesting people module
@@ -3143,6 +3292,714 @@ function displayProspectingResults(results) {
   // Log to console for debugging
   console.log(`Displayed ${results.length} results`);
 }
+
+// ============================================================================
+// TASTE TREE FUNCTIONS - User-Centric Interface
+// ============================================================================
+
+let selectedUser = null;
+let allUsers = [];
+let userTags = {}; // Map of userName -> array of category paths
+let allCategories = []; // Flat list of all categories
+let pendingChanges = {}; // Map of userName -> {add: [...], remove: [...]}
+let categoryTree = null; // Hierarchical tree structure for browsing
+let browseExpandedNodes = new Set(); // Track expanded nodes in browse tree
+
+// Load taste tree module - initialize users and categories
+async function loadTasteTree() {
+  const loadingEl = $("tasteTreeLoading");
+  const errorEl = $("tasteTreeError");
+  const contentEl = $("tasteTreeContent");
+
+  if (!loadingEl || !errorEl || !contentEl) return;
+
+  loadingEl.classList.remove("hidden");
+  errorEl.classList.add("hidden");
+  contentEl.classList.add("hidden");
+
+  try {
+    // Load users and categories in parallel
+    const [usersRes, categoriesRes] = await Promise.all([
+      fetch(`${API_URL || ""}/api/taste-tree/users`),
+      fetch(`${API_URL || ""}/api/taste-tree/all-categories`)
+    ]);
+
+    const usersJson = await usersRes.json();
+    const categoriesJson = await categoriesRes.json();
+
+    if (!usersJson.success) {
+      throw new Error(usersJson.error || "Failed to load users");
+    }
+    if (!categoriesJson.success) {
+      throw new Error(categoriesJson.error || "Failed to load categories");
+    }
+
+    allUsers = usersJson.data || [];
+    allCategories = categoriesJson.data || [];
+
+    // Load the full tree structure for browsing
+    const treeRes = await fetch(`${API_URL || ""}/api/taste-tree`);
+    const treeJson = await treeRes.json();
+    if (treeJson.success && treeJson.data) {
+      categoryTree = treeJson.data;
+    }
+
+    // Load tag counts for all users in parallel
+    await loadAllUserTagCounts();
+
+    loadingEl.classList.add("hidden");
+    contentEl.classList.remove("hidden");
+
+    // Render users list
+    renderUsersList();
+  } catch (err) {
+    console.error("Failed to load taste tree", err);
+    loadingEl.classList.add("hidden");
+    errorEl.textContent = `Error loading taste tree: ${err.message}`;
+    errorEl.classList.remove("hidden");
+  }
+}
+
+// Load tag counts for all users
+async function loadAllUserTagCounts() {
+  if (!allUsers || allUsers.length === 0) return;
+
+  // Load tag counts for all users in parallel
+  const tagCountPromises = allUsers.map(async (userName) => {
+    try {
+      const res = await fetch(`${API_URL || ""}/api/taste-tree/user-tags/${encodeURIComponent(userName)}`);
+      const json = await res.json();
+      if (json.success && json.data) {
+        userTags[userName] = json.data;
+        return { userName, count: json.data.length };
+      }
+      return { userName, count: 0 };
+    } catch (err) {
+      console.error(`Failed to load tags for ${userName}`, err);
+      return { userName, count: 0 };
+    }
+  });
+
+  await Promise.all(tagCountPromises);
+}
+
+// Render the users list in the left panel
+function renderUsersList() {
+  const usersListEl = $("usersList");
+  if (!usersListEl) return;
+
+  usersListEl.innerHTML = "";
+
+  if (allUsers.length === 0) {
+    usersListEl.innerHTML = `<p class="text-gray-500 text-sm text-center py-4">No users found</p>`;
+    return;
+  }
+
+  allUsers.forEach(userName => {
+    const userCard = document.createElement("div");
+    userCard.className = `user-card p-3 rounded-lg border cursor-pointer transition-colors ${
+      selectedUser === userName 
+        ? "bg-blue-100 border-blue-500 text-blue-700" 
+        : "bg-white border-gray-200 hover:bg-gray-50"
+    }`;
+    userCard.onclick = () => selectUser(userName);
+    
+    // Get tag count for this user (now loaded upfront)
+    const tagCount = userTags[userName] ? userTags[userName].length : 0;
+    
+    userCard.innerHTML = `
+      <div class="font-semibold">${userName}</div>
+      <div class="text-xs text-gray-600 mt-1">${tagCount} tag${tagCount !== 1 ? 's' : ''}</div>
+    `;
+    
+    usersListEl.appendChild(userCard);
+  });
+}
+
+// Filter users based on search query
+function filterUsers() {
+  const searchInput = document.getElementById("userSearchInput");
+  if (!searchInput) return;
+  
+  const query = searchInput.value.toLowerCase().trim();
+  const userCards = document.querySelectorAll(".user-card");
+  
+  userCards.forEach(card => {
+    const userName = card.querySelector(".font-semibold").textContent.toLowerCase();
+    if (userName.includes(query)) {
+      card.style.display = "";
+    } else {
+      card.style.display = "none";
+    }
+  });
+}
+
+// Select a user and load their tags
+async function selectUser(userName) {
+  selectedUser = userName;
+  
+  // Update UI
+  document.querySelectorAll(".user-card").forEach(card => {
+    const cardUserName = card.querySelector(".font-semibold").textContent;
+    if (cardUserName === userName) {
+      card.className = "user-card p-3 rounded-lg border cursor-pointer transition-colors bg-blue-100 border-blue-500 text-blue-700";
+    } else {
+      card.className = "user-card p-3 rounded-lg border cursor-pointer transition-colors bg-white border-gray-200 hover:bg-gray-50";
+    }
+  });
+
+  // Show user tags panel
+  $("noUserSelected").classList.add("hidden");
+  $("userTagsPanel").classList.remove("hidden");
+  $("selectedUserName").textContent = userName;
+
+  // Load user tags
+  await loadUserTags(userName);
+}
+
+// Load tags for a specific user
+async function loadUserTags(userName) {
+  try {
+    const res = await fetch(`${API_URL || ""}/api/taste-tree/user-tags/${encodeURIComponent(userName)}`);
+    const json = await res.json();
+
+    if (!json.success) {
+      throw new Error(json.error || "Failed to load user tags");
+    }
+
+    const tags = json.data || [];
+    userTags[userName] = tags;
+
+    // Update tag count in user card
+    const userCards = document.querySelectorAll(".user-card");
+    userCards.forEach(card => {
+      const cardUserName = card.querySelector(".font-semibold").textContent;
+      if (cardUserName === userName) {
+        const countEl = card.querySelector(".text-xs");
+        if (countEl) {
+          countEl.textContent = `${tags.length} tag${tags.length !== 1 ? 's' : ''}`;
+        }
+      }
+    });
+
+    // Render current tags
+    renderCurrentTags(tags);
+    
+    // Update header
+    $("selectedUserTagCount").textContent = `${tags.length} categor${tags.length !== 1 ? 'ies' : 'y'} tagged`;
+
+    // Reset pending changes for this user
+    if (!pendingChanges[userName]) {
+      pendingChanges[userName] = { add: [], remove: [] };
+    }
+    updatePendingChangesIndicator();
+    
+    // Refresh browse tree if in browse mode
+    if (!$("browseMode").classList.contains("hidden")) {
+      renderBrowseTree();
+    }
+  } catch (err) {
+    console.error("Failed to load user tags", err);
+    alert(`Error loading tags: ${err.message}`);
+  }
+}
+
+// Render current tags for the selected user
+function renderCurrentTags(tags) {
+  const tagsListEl = $("currentTagsList");
+  if (!tagsListEl) return;
+
+  tagsListEl.innerHTML = "";
+
+  if (tags.length === 0) {
+    tagsListEl.innerHTML = `<p class="text-gray-400 text-sm">No tags assigned</p>`;
+    return;
+  }
+
+  tags.forEach(path => {
+    const tagEl = document.createElement("div");
+    tagEl.className = "flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-3 py-2";
+    tagEl.dataset.categoryPath = JSON.stringify(path);
+    
+    const isPendingRemove = pendingChanges[selectedUser]?.remove.some(p => JSON.stringify(p) === JSON.stringify(path));
+    
+    tagEl.innerHTML = `
+      <div class="flex-1">
+        <div class="font-medium text-sm text-gray-800">${path[path.length - 1]}</div>
+        <div class="text-xs text-gray-500">${path.join(" > ")}</div>
+      </div>
+      <button
+        class="remove-tag-btn text-red-500 hover:text-red-700 text-lg font-bold px-2"
+        title="Remove tag"
+      >
+        ×
+      </button>
+    `;
+    
+    // Attach click handler
+    const removeBtn = tagEl.querySelector('.remove-tag-btn');
+    if (removeBtn) {
+      removeBtn.onclick = () => {
+        const path = JSON.parse(tagEl.dataset.categoryPath);
+        removeTagFromUser(path);
+      };
+    }
+    
+    if (isPendingRemove) {
+      tagEl.classList.add("opacity-50", "line-through");
+    }
+    
+    tagsListEl.appendChild(tagEl);
+  });
+}
+
+// Remove a tag from user (adds to pending changes)
+function removeTagFromUser(categoryPath) {
+  if (!selectedUser) return;
+
+  if (!pendingChanges[selectedUser]) {
+    pendingChanges[selectedUser] = { add: [], remove: [] };
+  }
+
+  // Remove from add list if it was pending to be added
+  pendingChanges[selectedUser].add = pendingChanges[selectedUser].add.filter(
+    p => JSON.stringify(p) !== JSON.stringify(categoryPath)
+  );
+
+  // Add to remove list if not already there
+  const alreadyInRemove = pendingChanges[selectedUser].remove.some(
+    p => JSON.stringify(p) === JSON.stringify(categoryPath)
+  );
+  if (!alreadyInRemove) {
+    pendingChanges[selectedUser].remove.push(categoryPath);
+  }
+
+  // Re-render to show pending state
+  renderCurrentTags(userTags[selectedUser] || []);
+  
+  // Re-render browse tree if it's visible
+  if (!$("browseMode").classList.contains("hidden")) {
+    renderBrowseTree();
+  }
+  
+  updatePendingChangesIndicator();
+}
+
+// Switch between search and browse modes
+function switchTagMode(mode) {
+  const searchMode = $("searchMode");
+  const browseMode = $("browseMode");
+  const searchTabBtn = $("searchTabBtn");
+  const browseTabBtn = $("browseTabBtn");
+
+  if (mode === "search") {
+    searchMode.classList.remove("hidden");
+    browseMode.classList.add("hidden");
+    searchTabBtn.classList.add("border-blue-600", "text-blue-600");
+    searchTabBtn.classList.remove("border-transparent", "text-gray-600");
+    browseTabBtn.classList.remove("border-blue-600", "text-blue-600");
+    browseTabBtn.classList.add("border-transparent", "text-gray-600");
+  } else {
+    searchMode.classList.add("hidden");
+    browseMode.classList.remove("hidden");
+    browseTabBtn.classList.add("border-blue-600", "text-blue-600");
+    browseTabBtn.classList.remove("border-transparent", "text-gray-600");
+    searchTabBtn.classList.remove("border-blue-600", "text-blue-600");
+    searchTabBtn.classList.add("border-transparent", "text-gray-600");
+    
+    // Render browse tree if not already rendered
+    if (categoryTree && $("categoryBrowseTree").children.length === 0) {
+      renderBrowseTree();
+    }
+  }
+}
+
+// Render the hierarchical category tree for browsing
+function renderBrowseTree() {
+  const container = $("categoryBrowseTree");
+  if (!container || !categoryTree) return;
+
+  container.innerHTML = "";
+  
+  // Build tree structure from flat categories
+  const tree = buildCategoryTree(allCategories);
+  
+  // Render tree recursively
+  renderBrowseTreeRecursive(tree, container, []);
+}
+
+// Build hierarchical tree structure from flat category list
+function buildCategoryTree(categories) {
+  const tree = {};
+  
+  categories.forEach(cat => {
+    let current = tree;
+    cat.path.forEach((segment, index) => {
+      if (!current[segment]) {
+        current[segment] = {
+          name: segment,
+          path: cat.path.slice(0, index + 1),
+          fullPath: cat.fullPath,
+          children: {},
+          isLeaf: index === cat.path.length - 1
+        };
+      }
+      current = current[segment].children;
+    });
+  });
+  
+  return tree;
+}
+
+// Render browse tree recursively
+function renderBrowseTreeRecursive(tree, container, parentPath = []) {
+  const entries = Object.entries(tree).sort((a, b) => a[0].localeCompare(b[0]));
+  
+  entries.forEach(([name, node]) => {
+    const currentPath = [...parentPath, name];
+    const pathKey = currentPath.join("|");
+    const isExpanded = browseExpandedNodes.has(pathKey);
+    const hasChildren = Object.keys(node.children).length > 0;
+    
+    // Check if already tagged
+    const currentTags = userTags[selectedUser] || [];
+    const isTagged = currentTags.some(t => JSON.stringify(t) === JSON.stringify(currentPath));
+    const isPendingAdd = pendingChanges[selectedUser]?.add.some(
+      p => JSON.stringify(p) === JSON.stringify(currentPath)
+    );
+    const isPendingRemove = pendingChanges[selectedUser]?.remove.some(
+      p => JSON.stringify(p) === JSON.stringify(currentPath)
+    );
+    
+    const nodeEl = document.createElement("div");
+    nodeEl.className = "browse-tree-node mb-1";
+    nodeEl.dataset.path = pathKey;
+    nodeEl.dataset.categoryPath = JSON.stringify(currentPath);
+    
+    const indentPx = parentPath.length * 20;
+    if (indentPx > 0) {
+      nodeEl.style.marginLeft = `${indentPx}px`;
+    }
+    
+    nodeEl.innerHTML = `
+      <div class="flex items-center gap-2 p-2 rounded hover:bg-gray-100 ${isTagged ? 'bg-blue-50' : ''}">
+        ${hasChildren ? `
+          <button
+            class="expand-browse-btn text-gray-500 hover:text-gray-700 text-xs w-5 h-5 flex items-center justify-center"
+            onclick="toggleBrowseNode('${pathKey}')"
+          >
+            ${isExpanded ? '▼' : '▶'}
+          </button>
+        ` : '<span class="w-5"></span>'}
+        <span class="flex-1 text-sm ${isTagged ? 'text-blue-700 font-medium' : 'text-gray-700'}">${name}</span>
+        ${isTagged ? `
+          <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Tagged</span>
+        ` : `
+          <button
+            class="add-from-browse-btn px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 ${isPendingAdd ? 'opacity-50 cursor-not-allowed' : ''}"
+            ${isPendingAdd ? 'disabled' : ''}
+          >
+            ${isPendingAdd ? 'Added' : 'Add'}
+          </button>
+        `}
+      </div>
+      <div class="browse-children ${isExpanded ? '' : 'hidden'}" data-path="${pathKey}"></div>
+    `;
+    
+    // Attach click handler for add button
+    const addBtn = nodeEl.querySelector('.add-from-browse-btn');
+    if (addBtn) {
+      addBtn.onclick = (e) => {
+        e.stopPropagation();
+        addTagToUser(currentPath);
+        // Re-render to update state
+        renderBrowseTree();
+      };
+    }
+    
+    container.appendChild(nodeEl);
+    
+    // Render children if expanded
+    if (hasChildren && isExpanded) {
+      const childrenContainer = nodeEl.querySelector(`.browse-children[data-path="${pathKey}"]`);
+      renderBrowseTreeRecursive(node.children, childrenContainer, currentPath);
+    }
+  });
+}
+
+// Toggle browse tree node expansion
+function toggleBrowseNode(pathKey) {
+  const isExpanded = browseExpandedNodes.has(pathKey);
+  const nodeEl = document.querySelector(`.browse-tree-node[data-path="${pathKey}"]`);
+  if (!nodeEl) return;
+
+  const childrenContainer = nodeEl.querySelector(`.browse-children[data-path="${pathKey}"]`);
+  const expandBtn = nodeEl.querySelector(`.expand-browse-btn`);
+  
+  if (!childrenContainer || !expandBtn) return;
+
+  if (isExpanded) {
+    browseExpandedNodes.delete(pathKey);
+    childrenContainer.classList.add("hidden");
+    expandBtn.textContent = "▶";
+  } else {
+    browseExpandedNodes.add(pathKey);
+    childrenContainer.classList.remove("hidden");
+    expandBtn.textContent = "▼";
+    
+    // Render children if not already rendered
+    if (childrenContainer.children.length === 0 && categoryTree) {
+      const path = pathKey.split("|");
+      const tree = buildCategoryTree(allCategories);
+      let current = tree;
+      for (const segment of path) {
+        if (current[segment]) {
+          current = current[segment].children;
+        } else {
+          return;
+        }
+      }
+      renderBrowseTreeRecursive(current, childrenContainer, path);
+    }
+  }
+}
+
+// Filter browse tree
+function filterBrowseTree() {
+  const filterInput = document.getElementById("browseFilterInput");
+  if (!filterInput) return;
+  
+  const query = filterInput.value.toLowerCase().trim();
+  const nodes = document.querySelectorAll(".browse-tree-node");
+  
+  if (!query) {
+    nodes.forEach(node => {
+      node.style.display = "";
+    });
+    return;
+  }
+  
+  nodes.forEach(node => {
+    const name = node.dataset.path.split("|").pop().toLowerCase();
+    const fullPath = node.querySelector(".text-sm")?.textContent.toLowerCase() || "";
+    const matches = name.includes(query) || fullPath.includes(query);
+    node.style.display = matches ? "" : "none";
+  });
+}
+
+// Search categories and show results
+function searchCategories() {
+  const searchInput = document.getElementById("tagSearchInput");
+  const resultsEl = $("tagSearchResults");
+  if (!searchInput || !resultsEl) return;
+
+  const query = searchInput.value.toLowerCase().trim();
+  
+  if (!query) {
+    resultsEl.classList.add("hidden");
+    return;
+  }
+
+  // Filter categories
+  const currentTags = userTags[selectedUser] || [];
+  const currentTagPaths = currentTags.map(t => JSON.stringify(t));
+  
+  const filtered = allCategories.filter(cat => {
+    const matchesSearch = cat.name.toLowerCase().includes(query) || 
+                         cat.fullPath.toLowerCase().includes(query);
+    const alreadyTagged = currentTagPaths.includes(JSON.stringify(cat.path));
+    return matchesSearch && !alreadyTagged;
+  });
+
+  resultsEl.innerHTML = "";
+  
+  if (filtered.length === 0) {
+    resultsEl.innerHTML = `<p class="text-gray-500 text-sm text-center py-4">No matching categories found</p>`;
+    resultsEl.classList.remove("hidden");
+    return;
+  }
+
+  filtered.slice(0, 10).forEach(cat => {
+    const resultEl = document.createElement("div");
+    resultEl.className = "flex items-center justify-between p-3 border-b border-gray-200 hover:bg-gray-50";
+    resultEl.dataset.categoryPath = JSON.stringify(cat.path);
+    
+    const isPendingAdd = pendingChanges[selectedUser]?.add.some(
+      p => JSON.stringify(p) === JSON.stringify(cat.path)
+    );
+    
+    resultEl.innerHTML = `
+      <div class="flex-1">
+        <div class="font-medium text-sm text-gray-800">${cat.name}</div>
+        <div class="text-xs text-gray-500">${cat.fullPath}</div>
+      </div>
+      <button
+        class="add-tag-btn px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 ${isPendingAdd ? 'opacity-50 cursor-not-allowed' : ''}"
+        ${isPendingAdd ? 'disabled' : ''}
+      >
+        ${isPendingAdd ? 'Added' : 'Add'}
+      </button>
+    `;
+    
+    // Attach click handler
+    const addBtn = resultEl.querySelector('.add-tag-btn');
+    if (addBtn) {
+      addBtn.onclick = () => {
+        const path = JSON.parse(resultEl.dataset.categoryPath);
+        addTagToUser(path);
+      };
+    }
+    
+    resultsEl.appendChild(resultEl);
+  });
+
+  resultsEl.classList.remove("hidden");
+}
+
+// Add a tag to user (adds to pending changes)
+function addTagToUser(categoryPath) {
+  if (!selectedUser) return;
+
+  if (!pendingChanges[selectedUser]) {
+    pendingChanges[selectedUser] = { add: [], remove: [] };
+  }
+
+  // Remove from remove list if it was pending to be removed
+  pendingChanges[selectedUser].remove = pendingChanges[selectedUser].remove.filter(
+    p => JSON.stringify(p) !== JSON.stringify(categoryPath)
+  );
+
+  // Add to add list if not already there
+  const alreadyInAdd = pendingChanges[selectedUser].add.some(
+    p => JSON.stringify(p) === JSON.stringify(categoryPath)
+  );
+  if (!alreadyInAdd) {
+    pendingChanges[selectedUser].add.push(categoryPath);
+  }
+
+  // Re-render search results to show pending state
+  searchCategories();
+  
+  // Re-render browse tree if it's visible
+  if (!$("browseMode").classList.contains("hidden")) {
+    renderBrowseTree();
+  }
+  
+  updatePendingChangesIndicator();
+}
+
+// Update pending changes indicator and save button
+function updatePendingChangesIndicator() {
+  if (!selectedUser) return;
+
+  const changes = pendingChanges[selectedUser] || { add: [], remove: [] };
+  const totalChanges = changes.add.length + changes.remove.length;
+
+  const indicatorEl = $("pendingChangesIndicator");
+  const countEl = $("pendingChangesCount");
+  const saveBtn = $("saveUserChangesBtn");
+
+  if (totalChanges > 0) {
+    indicatorEl.classList.remove("hidden");
+    if (countEl) {
+      countEl.textContent = totalChanges;
+    }
+    if (saveBtn) {
+      saveBtn.disabled = false;
+    }
+  } else {
+    indicatorEl.classList.add("hidden");
+    if (saveBtn) {
+      saveBtn.disabled = true;
+    }
+  }
+}
+
+// Save all pending changes for the selected user
+async function saveUserChanges() {
+  if (!selectedUser) return;
+
+  const changes = pendingChanges[selectedUser];
+  if (!changes || (changes.add.length === 0 && changes.remove.length === 0)) {
+    return;
+  }
+
+  const saveBtn = $("saveUserChangesBtn");
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving...";
+  }
+
+  try {
+    const res = await fetch(`${API_URL || ""}/api/taste-tree/batch-update-user`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_name: selectedUser,
+        add_paths: changes.add,
+        remove_paths: changes.remove
+      })
+    });
+
+    const json = await res.json();
+
+    if (!json.success) {
+      throw new Error(json.error || "Failed to save changes");
+    }
+
+    // Clear pending changes
+    pendingChanges[selectedUser] = { add: [], remove: [] };
+    
+    // Reload user tags to reflect changes
+    await loadUserTags(selectedUser);
+    
+    // Update tag count in user card
+    const userCards = document.querySelectorAll(".user-card");
+    userCards.forEach(card => {
+      const cardUserName = card.querySelector(".font-semibold").textContent;
+      if (cardUserName === selectedUser) {
+        const countEl = card.querySelector(".text-xs");
+        if (countEl) {
+          const tagCount = userTags[selectedUser] ? userTags[selectedUser].length : 0;
+          countEl.textContent = `${tagCount} tag${tagCount !== 1 ? 's' : ''}`;
+        }
+      }
+    });
+    
+    // Clear search
+    const searchInput = document.getElementById("tagSearchInput");
+    if (searchInput) {
+      searchInput.value = "";
+      $("tagSearchResults").classList.add("hidden");
+    }
+    
+    // Clear browse filter and refresh browse tree
+    const browseFilterInput = document.getElementById("browseFilterInput");
+    if (browseFilterInput) {
+      browseFilterInput.value = "";
+    }
+    if (!$("browseMode").classList.contains("hidden")) {
+      renderBrowseTree();
+    }
+
+    // Show success feedback
+    if (saveBtn) {
+      saveBtn.textContent = "Saved!";
+      setTimeout(() => {
+        saveBtn.textContent = "Save Changes";
+        saveBtn.disabled = true;
+      }, 2000);
+    }
+  } catch (err) {
+    console.error("Failed to save user changes", err);
+    alert(`Error saving changes: ${err.message}`);
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Save Changes";
+    }
+  }
+}
+
 
 // Export prospecting results to CSV
 function exportProspectingResultsToCSV() {

@@ -20,7 +20,13 @@ from supabase_db import (
     get_deals_funding_rounds,
     get_interesting_people,
     get_founder_contact_status,
-    upsert_founder_contact_status
+    upsert_founder_contact_status,
+    get_taste_tree,
+    update_taste_tree_lead,
+    get_all_users_from_tree,
+    get_user_tags,
+    get_all_category_paths,
+    batch_update_user_tags
 )
 from utils.stock_price import get_price_with_cache
 from utils.formatting import clean_nans
@@ -460,6 +466,133 @@ def search_prospects():
         })
     except ValueError as e:
         # Missing API keys
+        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------
+# TASTE TREE ENDPOINTS
+# ---------------------------------------------------------------------
+
+@app.route("/api/taste-tree", methods=["GET"])
+def get_taste_tree_endpoint():
+    """Get the latest taste_tree data from Supabase"""
+    try:
+        record = get_taste_tree()
+        if not record:
+            return jsonify({"success": False, "error": "No taste_tree record found"}), 404
+        
+        return jsonify({
+            "success": True,
+            "data": record.get("data"),
+            "version": record.get("version"),
+            "updated_at": record.get("updated_at")
+        })
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/taste-tree/update-lead", methods=["PUT"])
+def update_taste_tree_lead_endpoint():
+    """Update montage_lead for a specific node in the taste_tree"""
+    try:
+        payload = request.get_json(force=True) or {}
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Invalid JSON payload: {e}"}), 400
+    
+    category_path = payload.get("category_path")
+    montage_lead = payload.get("montage_lead")
+    
+    if not category_path or not isinstance(category_path, list):
+        return jsonify({"success": False, "error": "category_path must be a non-empty array"}), 400
+    
+    # Allow montage_lead to be None or empty string to clear it
+    if montage_lead is not None and not isinstance(montage_lead, str):
+        return jsonify({"success": False, "error": "montage_lead must be a string or null"}), 400
+    
+    try:
+        success = update_taste_tree_lead(category_path, montage_lead)
+        if not success:
+            return jsonify({"success": False, "error": "Failed to update taste tree"}), 500
+        
+        return jsonify({"success": True})
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/taste-tree/users", methods=["GET"])
+def get_taste_tree_users_endpoint():
+    """Get all unique users (montage_lead values) from the taste tree"""
+    try:
+        users = get_all_users_from_tree()
+        return jsonify({"success": True, "data": users})
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/taste-tree/user-tags/<path:user_name>", methods=["GET"])
+def get_user_tags_endpoint(user_name: str):
+    """Get all category paths where a specific user is tagged"""
+    try:
+        # URL decode the user name
+        from urllib.parse import unquote
+        user_name = unquote(user_name)
+        
+        tags = get_user_tags(user_name)
+        return jsonify({"success": True, "data": tags})
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/taste-tree/all-categories", methods=["GET"])
+def get_all_categories_endpoint():
+    """Get a flat list of all categories with their paths"""
+    try:
+        categories = get_all_category_paths()
+        return jsonify({"success": True, "data": categories})
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/taste-tree/batch-update-user", methods=["PUT"])
+def batch_update_user_tags_endpoint():
+    """Batch update montage_lead for multiple categories"""
+    try:
+        payload = request.get_json(force=True) or {}
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Invalid JSON payload: {e}"}), 400
+    
+    user_name = payload.get("user_name")
+    add_paths = payload.get("add_paths", [])
+    remove_paths = payload.get("remove_paths", [])
+    
+    if not user_name or not isinstance(user_name, str):
+        return jsonify({"success": False, "error": "user_name must be a non-empty string"}), 400
+    
+    if not isinstance(add_paths, list) or not isinstance(remove_paths, list):
+        return jsonify({"success": False, "error": "add_paths and remove_paths must be arrays"}), 400
+    
+    # Validate that all paths are lists
+    for path in add_paths + remove_paths:
+        if not isinstance(path, list):
+            return jsonify({"success": False, "error": "All paths must be arrays"}), 400
+    
+    try:
+        success = batch_update_user_tags(user_name, add_paths, remove_paths)
+        if not success:
+            return jsonify({"success": False, "error": "Failed to batch update user tags"}), 500
+        
+        return jsonify({"success": True})
+    except ValueError as e:
         return jsonify({"success": False, "error": str(e)}), 400
     except Exception as e:
         print(traceback.format_exc())

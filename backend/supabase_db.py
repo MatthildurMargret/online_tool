@@ -5,6 +5,7 @@ Handles all interactions with the Supabase database
 
 import os
 import re
+import copy
 from datetime import datetime
 from typing import Optional, Dict, List, Union
 from supabase import create_client, Client
@@ -456,3 +457,414 @@ def upsert_founder_contact_status(
     except Exception as e:
         print(f"Error upserting founder contact status for {entry_id}: {e}")
         return None
+
+
+def get_taste_tree() -> Optional[Dict]:
+    """
+    Retrieve the latest taste_tree record from Supabase
+    Returns the data JSONB field or None if not found
+    """
+    if not supabase:
+        raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
+    
+    try:
+        result = (
+            supabase.table("taste_tree")
+            .select("id, data, version, created_at, updated_at")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        
+        if not result.data:
+            return None
+        
+        return result.data[0]
+    except Exception as e:
+        print(f"Error retrieving taste tree: {e}")
+        return None
+
+
+def update_taste_tree_lead(category_path: List[str], montage_lead: Optional[str]) -> bool:
+    """
+    Update the montage_lead field for a specific node in the taste_tree JSONB structure.
+    
+    Args:
+        category_path: List of category names from root to target node (e.g., ["Commerce", "Retail & Consumer"])
+        montage_lead: New value for montage_lead (string or None to clear)
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    if not supabase:
+        raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
+    
+    if not category_path:
+        raise ValueError("category_path cannot be empty")
+    
+    try:
+        # Get the latest taste_tree record
+        record = get_taste_tree()
+        if not record:
+            raise Exception("No taste_tree record found")
+        
+        tree_id = record["id"]
+        # Use deep copy to avoid modifying the original data structure
+        data = copy.deepcopy(record["data"]) if isinstance(record["data"], dict) else record["data"]
+        
+        # Navigate to the target node
+        # The tree structure: { "Category": { "meta": {...}, "children": { "Child": {...} } } }
+        # The path: [top_level_category, child_category, grandchild_category, ...]
+        current = data
+        for i, category_name in enumerate(category_path):
+            if not isinstance(current, dict):
+                raise ValueError(f"Expected dict at path level {i}, but got {type(current).__name__}")
+            
+            # At the first level (i=0), the category is a direct key in the root
+            # At subsequent levels (i>0), we need to navigate through "children"
+            if i == 0:
+                # Top-level category - direct key in root
+                if category_name not in current:
+                    available_keys = list(current.keys())
+                    available_keys_str = ", ".join(available_keys[:10])
+                    if len(available_keys) > 10:
+                        available_keys_str += f", ... (and {len(available_keys) - 10} more)"
+                    raise ValueError(
+                        f"Top-level category '{category_name}' not found. "
+                        f"Available top-level categories: [{available_keys_str}]"
+                    )
+                current = current[category_name]
+            else:
+                # Nested categories are in the "children" object
+                if "children" not in current:
+                    raise ValueError(
+                        f"Category '{category_path[i-1]}' has no children. "
+                        f"Cannot navigate to '{category_name}'"
+                    )
+                if not isinstance(current["children"], dict):
+                    raise ValueError(
+                        f"Expected 'children' to be a dict in category '{category_path[i-1]}'"
+                    )
+                if category_name not in current["children"]:
+                    available_keys = list(current["children"].keys())
+                    available_keys_str = ", ".join(available_keys[:10])
+                    if len(available_keys) > 10:
+                        available_keys_str += f", ... (and {len(available_keys) - 10} more)"
+                    raise ValueError(
+                        f"Category '{category_name}' not found in children of '{category_path[i-1]}'. "
+                        f"Path so far: {category_path[:i]}. "
+                        f"Available children: [{available_keys_str}]"
+                    )
+                current = current["children"][category_name]
+        
+        # Ensure meta exists
+        if "meta" not in current:
+            current["meta"] = {}
+        
+        # Update montage_lead
+        if montage_lead is None or montage_lead.strip() == "":
+            current["meta"].pop("montage_lead", None)
+        else:
+            current["meta"]["montage_lead"] = montage_lead.strip()
+        
+        # Update the record in Supabase
+        result = (
+            supabase.table("taste_tree")
+            .update({"data": data, "updated_at": datetime.utcnow().isoformat() + "Z"})
+            .eq("id", tree_id)
+            .execute()
+        )
+        
+        return result.data is not None
+    except Exception as e:
+        print(f"Error updating taste tree lead: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def _traverse_tree_recursive(node, path: List[str], callback):
+    """
+    Recursively traverse the tree structure and call callback for each node.
+    
+    Args:
+        node: Current node in the tree
+        path: Current path from root to this node
+        callback: Function to call for each node: callback(path, node_data)
+    """
+    if not isinstance(node, dict):
+        return
+    
+    # Process current node if it has meta
+    if "meta" in node:
+        callback(path, node)
+    
+    # Process children recursively
+    if "children" in node and isinstance(node["children"], dict):
+        for child_name, child_data in node["children"].items():
+            if isinstance(child_data, dict):
+                _traverse_tree_recursive(child_data, path + [child_name], callback)
+
+
+def _normalize_user_name(name: str) -> str:
+    """
+    Normalize user name to canonical form (title case).
+    Handles case-insensitive matching.
+    """
+    if not name or not isinstance(name, str):
+        return ""
+    # Convert to title case (first letter uppercase, rest lowercase)
+    # This handles "DAphne" -> "Daphne", "MATT" -> "Matt"
+    return name.strip().title()
+
+
+def get_all_users_from_tree() -> List[str]:
+    """
+    Extract all unique user names (montage_lead values) from the taste tree.
+    Handles comma-separated lists and returns individual unique user names.
+    Normalizes names to title case for case-insensitive matching.
+    Returns a sorted list of unique user names.
+    """
+    if not supabase:
+        raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
+    
+    try:
+        record = get_taste_tree()
+        if not record or not record.get("data"):
+            return []
+        
+        data = record["data"]
+        users = set()
+        
+        def collect_user(path, node_data):
+            meta = node_data.get("meta", {})
+            montage_lead = meta.get("montage_lead")
+            if montage_lead and isinstance(montage_lead, str) and montage_lead.strip():
+                # Split by comma and extract individual names
+                names = [name.strip() for name in montage_lead.split(",") if name.strip()]
+                for name in names:
+                    # Normalize to title case for consistent display
+                    normalized = _normalize_user_name(name)
+                    if normalized:
+                        users.add(normalized)
+        
+        # Traverse all top-level categories
+        for category_name, category_data in data.items():
+            if isinstance(category_data, dict):
+                _traverse_tree_recursive(category_data, [category_name], collect_user)
+        
+        return sorted(list(users))
+    except Exception as e:
+        print(f"Error extracting users from taste tree: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+
+def get_user_tags(user_name: str) -> List[List[str]]:
+    """
+    Find all category paths where a specific user is tagged as montage_lead.
+    Handles comma-separated lists - checks if user_name appears in the list (case-insensitive).
+    
+    Args:
+        user_name: The user name to search for (will be normalized)
+    
+    Returns:
+        List of category paths, where each path is a list of strings
+        e.g., [["Commerce", "Retail & Consumer"], ["Healthcare", "Digital Health"]]
+    """
+    if not supabase:
+        raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
+    
+    if not user_name or not isinstance(user_name, str):
+        return []
+    
+    try:
+        record = get_taste_tree()
+        if not record or not record.get("data"):
+            return []
+        
+        data = record["data"]
+        tags = []
+        # Normalize the search name for case-insensitive matching
+        user_name_normalized = _normalize_user_name(user_name)
+        
+        def check_user(path, node_data):
+            meta = node_data.get("meta", {})
+            montage_lead = meta.get("montage_lead")
+            if montage_lead and isinstance(montage_lead, str) and montage_lead.strip():
+                # Split by comma and check if user_name is in the list (case-insensitive)
+                names = [name.strip() for name in montage_lead.split(",") if name.strip()]
+                # Check if normalized version of any name matches
+                for name in names:
+                    if _normalize_user_name(name) == user_name_normalized:
+                        tags.append(path.copy())
+                        break  # Found match, no need to check other names in this node
+        
+        # Traverse all top-level categories
+        for category_name, category_data in data.items():
+            if isinstance(category_data, dict):
+                _traverse_tree_recursive(category_data, [category_name], check_user)
+        
+        return tags
+    except Exception as e:
+        print(f"Error getting user tags: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+
+def get_all_category_paths() -> List[Dict]:
+    """
+    Get a flat list of all categories in the tree with their paths.
+    
+    Returns:
+        List of dictionaries with keys:
+        - path: List of strings representing the category path
+        - name: The category name (last element of path)
+        - fullPath: String representation like "Category > Subcategory"
+    """
+    if not supabase:
+        raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
+    
+    try:
+        record = get_taste_tree()
+        if not record or not record.get("data"):
+            return []
+        
+        data = record["data"]
+        categories = []
+        
+        def collect_category(path, node_data):
+            if path:  # Only add if path is not empty
+                categories.append({
+                    "path": path.copy(),
+                    "name": path[-1],
+                    "fullPath": " > ".join(path)
+                })
+        
+        # Traverse all top-level categories
+        for category_name, category_data in data.items():
+            if isinstance(category_data, dict):
+                _traverse_tree_recursive(category_data, [category_name], collect_category)
+        
+        return categories
+    except Exception as e:
+        print(f"Error getting all category paths: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+
+def batch_update_user_tags(user_name: str, add_paths: List[List[str]], remove_paths: List[List[str]]) -> bool:
+    """
+    Batch update montage_lead for multiple categories.
+    Adds the user to categories in add_paths and removes from categories in remove_paths.
+    
+    Args:
+        user_name: The user name to set/remove
+        add_paths: List of category paths to add the user to
+        remove_paths: List of category paths to remove the user from
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    if not supabase:
+        raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
+    
+    if not user_name or not isinstance(user_name, str):
+        raise ValueError("user_name must be a non-empty string")
+    
+    try:
+        # Get the latest taste_tree record
+        record = get_taste_tree()
+        if not record:
+            raise Exception("No taste_tree record found")
+        
+        tree_id = record["id"]
+        # Use deep copy to avoid modifying the original data structure
+        data = copy.deepcopy(record["data"]) if isinstance(record["data"], dict) else record["data"]
+        
+        # Process all paths to update
+        all_paths = add_paths + remove_paths
+        for category_path in all_paths:
+            if not category_path:
+                continue
+            
+            # Navigate to the target node
+            current = data
+            for i, category_name in enumerate(category_path):
+                if not isinstance(current, dict):
+                    continue
+                
+                if i == 0:
+                    # Top-level category
+                    if category_name not in current:
+                        continue
+                    current = current[category_name]
+                else:
+                    # Nested categories are in the "children" object
+                    if "children" not in current or not isinstance(current["children"], dict):
+                        continue
+                    if category_name not in current["children"]:
+                        continue
+                    current = current["children"][category_name]
+            
+            # Update montage_lead
+            if not isinstance(current, dict):
+                continue
+            
+            if "meta" not in current:
+                current["meta"] = {}
+            
+            existing_lead = current["meta"].get("montage_lead", "")
+            existing_names = []
+            if existing_lead and isinstance(existing_lead, str) and existing_lead.strip():
+                # Parse existing comma-separated list, preserving original casing
+                existing_names = [name.strip() for name in existing_lead.split(",") if name.strip()]
+            
+            # Normalize the user name we're adding/removing
+            user_name_normalized = _normalize_user_name(user_name)
+            
+            if category_path in add_paths:
+                # Check if user already exists (case-insensitive)
+                user_exists = False
+                for i, existing_name in enumerate(existing_names):
+                    if _normalize_user_name(existing_name) == user_name_normalized:
+                        # User already exists, keep original casing
+                        user_exists = True
+                        break
+                
+                # Add user if not already present (use normalized/canonical form)
+                if not user_exists:
+                    existing_names.append(user_name_normalized)
+                # Reconstruct comma-separated string (sorted for consistency)
+                current["meta"]["montage_lead"] = ", ".join(sorted(existing_names, key=str.lower))
+            elif category_path in remove_paths:
+                # Remove user from the list (case-insensitive match)
+                existing_names = [
+                    name for name in existing_names 
+                    if _normalize_user_name(name) != user_name_normalized
+                ]
+                # Update or remove montage_lead
+                if existing_names:
+                    current["meta"]["montage_lead"] = ", ".join(sorted(existing_names, key=str.lower))
+                else:
+                    # Remove montage_lead if no users left
+                    if "montage_lead" in current["meta"]:
+                        del current["meta"]["montage_lead"]
+        
+        # Update the record in Supabase
+        result = (
+            supabase.table("taste_tree")
+            .update({"data": data, "updated_at": datetime.utcnow().isoformat() + "Z"})
+            .eq("id", tree_id)
+            .execute()
+        )
+        
+        return result.data is not None
+    except Exception as e:
+        print(f"Error batch updating user tags: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
