@@ -363,10 +363,35 @@ def get_interesting_people() -> List[Dict]:
         return []
 
 
+def normalize_entry_id(entry_id: str) -> str:
+    """
+    Normalize entry ID to ensure consistent matching.
+    For LinkedIn URLs, removes protocol and www prefix, normalizes domain to lowercase.
+    """
+    if not entry_id:
+        return entry_id
+    
+    normalized = entry_id.strip()
+    
+    # Normalize LinkedIn URLs to a consistent format
+    if 'linkedin.com' in normalized.lower():
+        # Remove protocol (http://, https://)
+        import re
+        normalized = re.sub(r'^https?://', '', normalized, flags=re.IGNORECASE)
+        # Remove www. prefix
+        normalized = re.sub(r'^www\.', '', normalized, flags=re.IGNORECASE)
+        # Ensure domain is lowercase but preserve path case
+        if normalized.lower().startswith('linkedin.com'):
+            normalized = 'linkedin.com' + normalized[len('linkedin.com'):]
+    
+    return normalized
+
+
 def get_founder_contact_status(entry_ids: List[str]) -> Dict[str, Dict]:
     """
     Fetch contact status for a list of sourcing entry_ids.
     Returns mapping of entry_id -> status payload.
+    Normalizes entry IDs for consistent matching and tries multiple format variations.
     """
     if not supabase:
         raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
@@ -374,16 +399,129 @@ def get_founder_contact_status(entry_ids: List[str]) -> Dict[str, Dict]:
     if not entry_ids:
         return {}
 
+    # Build set of all IDs to try (normalized + original + variations)
+    all_ids_to_try = set()
+    id_mapping = {}  # Maps normalized ID to list of original requested IDs
+    
+    for eid in entry_ids:
+        if not eid:
+            continue
+        eid = eid.strip()
+        normalized = normalize_entry_id(eid)
+        
+        # Track which original IDs map to this normalized ID
+        if normalized not in id_mapping:
+            id_mapping[normalized] = []
+        id_mapping[normalized].append(eid)
+        
+        # Add normalized and original to query set
+        all_ids_to_try.add(normalized)
+        all_ids_to_try.add(eid)
+        
+        # For LinkedIn URLs, add common variations
+        if 'linkedin.com' in eid.lower():
+            if not eid.lower().startswith('http'):
+                all_ids_to_try.add(f'https://{eid}')
+                all_ids_to_try.add(f'http://{eid}')
+            if not eid.lower().startswith('www.'):
+                all_ids_to_try.add(f'www.{eid}')
+
     try:
-        result = (
-            supabase.table("founder_contact_status")
-            .select("entry_id, contacted, contacted_at, contacted_by, in_pipeline, in_pipeline_at")
-            .in_("entry_id", entry_ids)
-            .execute()
-        )
-        return {row["entry_id"]: row for row in result.data or []}
+        # Debug logging
+        print(f"[get_founder_contact_status] Requested {len(entry_ids)} entry IDs: {entry_ids[:3]}...")
+        print(f"[get_founder_contact_status] Querying with {len(all_ids_to_try)} variations: {list(all_ids_to_try)[:5]}...")
+        
+        # Debug: Check what's actually in the database
+        if len(entry_ids) > 0:
+            sample_id = entry_ids[0]
+            print(f"[get_founder_contact_status] DEBUG: Sample requested ID: '{sample_id}'")
+            print(f"[get_founder_contact_status] DEBUG: Normalized sample: '{normalize_entry_id(sample_id)}'")
+            
+            # Try exact match first
+            try:
+                exact_result = (
+                    supabase.table("founder_contact_status")
+                    .select("entry_id")
+                    .eq("entry_id", sample_id)
+                    .limit(1)
+                    .execute()
+                )
+                if exact_result.data:
+                    print(f"[get_founder_contact_status] DEBUG: Found exact match: {exact_result.data[0]['entry_id']}")
+                else:
+                    print(f"[get_founder_contact_status] DEBUG: No exact match found")
+                    
+                # Try with normalized version
+                normalized_sample = normalize_entry_id(sample_id)
+                if normalized_sample != sample_id:
+                    norm_result = (
+                        supabase.table("founder_contact_status")
+                        .select("entry_id")
+                        .eq("entry_id", normalized_sample)
+                        .limit(1)
+                        .execute()
+                    )
+                    if norm_result.data:
+                        print(f"[get_founder_contact_status] DEBUG: Found normalized match: {norm_result.data[0]['entry_id']}")
+                
+                # Get a sample of what's actually in the database
+                sample_db = (
+                    supabase.table("founder_contact_status")
+                    .select("entry_id")
+                    .limit(5)
+                    .execute()
+                )
+                if sample_db.data:
+                    print(f"[get_founder_contact_status] DEBUG: Sample entry_ids in DB: {[r['entry_id'] for r in sample_db.data]}")
+                else:
+                    print(f"[get_founder_contact_status] DEBUG: No records found in founder_contact_status table at all!")
+                    
+            except Exception as debug_e:
+                import traceback
+                print(f"[get_founder_contact_status] DEBUG query error: {debug_e}")
+                print(traceback.format_exc())
+        
+        # Supabase .in_() has a limit, so batch queries if needed (limit is typically 100)
+        BATCH_SIZE = 100
+        all_ids_list = list(all_ids_to_try)
+        result_map = {}
+        
+        for i in range(0, len(all_ids_list), BATCH_SIZE):
+            batch = all_ids_list[i:i + BATCH_SIZE]
+            print(f"[get_founder_contact_status] Querying batch {i//BATCH_SIZE + 1} with {len(batch)} IDs")
+            
+            result = (
+                supabase.table("founder_contact_status")
+                .select("entry_id, contacted, contacted_at, contacted_by, in_pipeline, in_pipeline_at")
+                .in_("entry_id", batch)
+                .execute()
+            )
+            
+            print(f"[get_founder_contact_status] Batch returned {len(result.data or [])} rows")
+            if result.data:
+                print(f"[get_founder_contact_status] Sample returned entry_ids: {[r['entry_id'] for r in result.data[:3]]}")
+            
+            # Build result map: for each found record, map it to all requested IDs that match
+            for row in result.data or []:
+                db_entry_id = row["entry_id"]
+                db_normalized = normalize_entry_id(db_entry_id)
+                
+                print(f"[get_founder_contact_status] Processing DB entry_id: {db_entry_id}, normalized: {db_normalized}")
+                
+                # Map this record to all requested IDs that normalize to the same value
+                if db_normalized in id_mapping:
+                    for req_id in id_mapping[db_normalized]:
+                        result_map[req_id] = row
+                # Also map by normalized key and original DB key
+                result_map[db_normalized] = row
+                result_map[db_entry_id] = row
+        
+        print(f"[get_founder_contact_status] Final result map has {len(result_map)} entries")
+        return result_map
     except Exception as e:
+        import traceback
         print(f"Error retrieving founder contact status: {e}")
+        print(traceback.format_exc())
         return {}
 
 
@@ -396,6 +534,7 @@ def upsert_founder_contact_status(
     """
     Persist outreach status for a sourcing entry.
     When a status boolean is True, the corresponding *_at timestamp is set to current UTC time.
+    Normalizes entry_id before storing to ensure consistency.
     """
     if not supabase:
         raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
@@ -403,7 +542,9 @@ def upsert_founder_contact_status(
     if not entry_id:
         raise ValueError("entry_id is required")
 
-    payload: Dict[str, Optional[Union[str, bool]]] = {"entry_id": entry_id}
+    # Normalize entry_id before storing
+    normalized_entry_id = normalize_entry_id(entry_id)
+    payload: Dict[str, Optional[Union[str, bool]]] = {"entry_id": normalized_entry_id}
     contacted_provided = contacted is not None
     in_pipeline_provided = in_pipeline is not None
 
@@ -420,14 +561,25 @@ def upsert_founder_contact_status(
 
     existing_record: Optional[Dict] = None
     try:
+        # Try to find existing record with normalized ID, and also try original format
         existing_result = (
             supabase.table("founder_contact_status")
             .select("entry_id, contacted, contacted_at, contacted_by, in_pipeline, in_pipeline_at")
-            .eq("entry_id", entry_id)
+            .eq("entry_id", normalized_entry_id)
             .execute()
         )
         if existing_result.data:
             existing_record = existing_result.data[0]
+        else:
+            # Try with original format as fallback
+            existing_result = (
+                supabase.table("founder_contact_status")
+                .select("entry_id, contacted, contacted_at, contacted_by, in_pipeline, in_pipeline_at")
+                .eq("entry_id", entry_id)
+                .execute()
+            )
+            if existing_result.data:
+                existing_record = existing_result.data[0]
     except Exception as e:
         print(f"Error fetching existing founder contact status for {entry_id}: {e}")
 

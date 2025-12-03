@@ -423,6 +423,9 @@ def upsert_founder_contact_status_endpoint(entry_id: str):
     in_pipeline_raw = payload.get("in_pipeline")
     in_pipeline = bool(in_pipeline_raw) if in_pipeline_raw is not None else None
 
+    print(f"[upsert_founder_contact_status_endpoint] Entry ID: {entry_id}")
+    print(f"[upsert_founder_contact_status_endpoint] Payload received: contacted={contacted_raw} -> {contacted}, in_pipeline={in_pipeline_raw} -> {in_pipeline}")
+
     try:
         record = upsert_founder_contact_status(
             entry_id,
@@ -430,6 +433,7 @@ def upsert_founder_contact_status_endpoint(entry_id: str):
             contacted_by=contacted_by,
             in_pipeline=in_pipeline,
         )
+        print(f"[upsert_founder_contact_status_endpoint] Record returned: {record}")
         if record is None:
             return jsonify({"success": False, "error": "Failed to update contact status"}), 500
         return jsonify({"success": True, "data": record})

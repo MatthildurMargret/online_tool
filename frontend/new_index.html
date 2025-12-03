@@ -1382,27 +1382,56 @@ const CONTACT_STATUS_ENDPOINT = "/api/founders/contact-status";
 const contactStatusCache = new Map();
 
 function resolveEntryId(row) {
+  /**
+   * Resolve the entry ID for a founder row.
+   * IMPORTANT: The database entry_id column stores profile_url, so we prioritize profile_url.
+   * This ensures consistency between what we store and what we look up.
+   */
   const candidates = [
-    row.entry_id,
+    row.profile_url,  // Prioritize profile_url since that's what's stored in DB entry_id column
+    row.entry_id,     // Check entry_id if explicitly set (though DB uses profile_url)
     row.id,
     row.uuid,
     row.company_uuid,
     row.company_id,
-    row.profile_url,
     row.company_name
   ];
 
   for (const value of candidates) {
     if (value === null || value === undefined) continue;
     const str = String(value).trim();
-    if (str) return str;
+    if (str) {
+      return str;
+    }
   }
 
   return null;
 }
 
+function normalizeEntryId(entryId) {
+  if (!entryId) return null;
+  let normalized = String(entryId).trim();
+  
+  // Normalize LinkedIn URLs to a consistent format
+  // Remove protocol (http://, https://) and www. prefix
+  // Convert to lowercase for domain part, but preserve the path
+  if (normalized.includes('linkedin.com')) {
+    // Remove protocol
+    normalized = normalized.replace(/^https?:\/\//i, '');
+    // Remove www. if present
+    normalized = normalized.replace(/^www\./i, '');
+    // Ensure it starts with linkedin.com (lowercase domain)
+    if (normalized.toLowerCase().startsWith('linkedin.com')) {
+      normalized = 'linkedin.com' + normalized.substring('linkedin.com'.length);
+    }
+  }
+  
+  return normalized;
+}
+
 async function fetchContactStatuses(entryIds) {
-  const ids = Array.from(new Set(entryIds.filter(Boolean)));
+  // Normalize entry IDs to ensure consistent matching
+  const ids = Array.from(new Set(entryIds.filter(Boolean).map(normalizeEntryId)));
   if (!ids.length) return {};
 
   const uncached = ids.filter(id => !contactStatusCache.has(id));
@@ -1412,16 +1441,43 @@ async function fetchContactStatuses(entryIds) {
     uncached.forEach(id => params.append("ids", id));
 
     try {
+      console.log(`Fetching contact status for ${uncached.length} entry IDs:`, uncached.slice(0, 5), uncached.length > 5 ? '...' : '');
+      console.log(`API URL: ${CONTACT_STATUS_ENDPOINT}?${params.toString()}`);
       const res = await fetch(`${CONTACT_STATUS_ENDPOINT}?${params.toString()}`);
       if (res.ok) {
         const json = await res.json();
+        console.log("Full API response:", json);
         if (json.success && json.data) {
+          // Debug logging
+          const returnedKeys = Object.keys(json.data);
+          console.log(`Fetched contact status data: ${returnedKeys.length} entries returned`, returnedKeys.slice(0, 5), returnedKeys.length > 5 ? '...' : '');
+          console.log("Sample returned entry IDs:", returnedKeys.slice(0, 3));
+          console.log("Sample requested entry IDs:", uncached.slice(0, 3));
+          if (returnedKeys.length > 0) {
+            console.log("First returned entry details:", json.data[returnedKeys[0]]);
+          }
+          
+          // Normalize entry IDs from API response to ensure consistent matching
           Object.entries(json.data).forEach(([key, value]) => {
-            contactStatusCache.set(key, value);
+            const normalizedKey = normalizeEntryId(key);
+            if (normalizedKey) {
+              contactStatusCache.set(normalizedKey, value);
+              // Also store with original key if different (for fallback lookups)
+              if (normalizedKey !== key) {
+                contactStatusCache.set(key, value);
+              }
+              // Also update the entry_id in the value to be normalized for consistency
+              if (value && typeof value === 'object') {
+                value.entry_id = normalizedKey;
+              }
+            }
           });
+        } else {
+          console.warn("Contact status API returned no data:", json);
         }
       } else {
-        console.error("Failed to fetch contact status", res.statusText);
+        const errorText = await res.text();
+        console.error("Failed to fetch contact status", res.status, res.statusText, errorText);
       }
     } catch (err) {
       console.error("Error fetching contact status", err);
@@ -1430,16 +1486,55 @@ async function fetchContactStatuses(entryIds) {
 
   const map = {};
   ids.forEach(id => {
+    // Try exact match first
     if (contactStatusCache.has(id)) {
       map[id] = contactStatusCache.get(id);
+    } else {
+      // For LinkedIn URLs, try alternative formats as fallback
+      if (id.includes('linkedin.com')) {
+        // Try with https:// prefix
+        const withHttps = `https://${id}`;
+        if (contactStatusCache.has(withHttps)) {
+          map[id] = contactStatusCache.get(withHttps);
+          // Also update cache with normalized key for future lookups
+          contactStatusCache.set(id, contactStatusCache.get(withHttps));
+        } else {
+          // Try with http:// prefix
+          const withHttp = `http://${id}`;
+          if (contactStatusCache.has(withHttp)) {
+            map[id] = contactStatusCache.get(withHttp);
+            contactStatusCache.set(id, contactStatusCache.get(withHttp));
+          } else {
+            // Try with www. prefix
+            const withWww = `www.${id}`;
+            if (contactStatusCache.has(withWww)) {
+              map[id] = contactStatusCache.get(withWww);
+              contactStatusCache.set(id, contactStatusCache.get(withWww));
+            } else {
+              // Debug: log missing entries
+              console.warn(`Contact status not found for entry_id: ${id} (tried variations: ${withHttps}, ${withHttp}, ${withWww})`);
+            }
+          }
+        }
+      } else {
+        // Debug: log missing entries for non-LinkedIn URLs
+        console.warn(`Contact status not found for entry_id: ${id}`);
+      }
     }
   });
+  
+  // Debug logging
+  console.log(`Contact status map built: ${Object.keys(map).length} entries found for ${ids.length} requested`);
   return map;
 }
 
 async function persistFounderStatus(entryId, updates = {}) {
+  const normalizedId = normalizeEntryId(entryId);
+  if (!normalizedId) {
+    throw new Error("Invalid entry ID");
+  }
   const payload = { ...updates };
-  const res = await fetch(`${CONTACT_STATUS_ENDPOINT}/${encodeURIComponent(entryId)}`, {
+  const res = await fetch(`${CONTACT_STATUS_ENDPOINT}/${encodeURIComponent(normalizedId)}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
@@ -1454,8 +1549,8 @@ async function persistFounderStatus(entryId, updates = {}) {
     throw new Error(json.error || "Unknown error while updating founder status");
   }
 
-  const record = json.data || { entry_id: entryId, ...updates };
-  contactStatusCache.set(entryId, record);
+  const record = json.data || { entry_id: normalizedId, ...updates };
+  contactStatusCache.set(normalizedId, record);
   return record;
 }
 
@@ -1478,8 +1573,11 @@ function syncFounderStatusUI(card, record) {
   toggles.forEach(toggle => {
     const statusType = toggle.dataset.statusType;
     if (!statusType) return;
+    // Explicitly check if the statusType exists in record (even if it's false)
     if (statusType in record) {
-      toggle.checked = Boolean(record[statusType]);
+      const value = record[statusType];
+      toggle.checked = value === true || value === "true" || value === 1;
+      console.log(`Syncing UI: ${statusType} = ${value}, checkbox.checked = ${toggle.checked}`);
     }
   });
 
@@ -1510,16 +1608,18 @@ function attachContactStatusHandlers(card, row) {
       event.stopPropagation();
 
       const encodedId = toggle.dataset.entryId || "";
-      const entryId = encodedId ? decodeURIComponent(encodedId) : resolveEntryId(row);
+      const entryId = normalizeEntryId(encodedId ? decodeURIComponent(encodedId) : resolveEntryId(row));
       const statusType = toggle.dataset.statusType;
 
       if (!entryId || !statusType) return;
 
       const nextValue = toggle.checked;
+      console.log(`Updating ${statusType} for ${entryId} to ${nextValue}`);
       toggle.disabled = true;
 
       try {
         const record = await persistFounderStatus(entryId, { [statusType]: nextValue });
+        console.log(`Update successful, record:`, record);
         syncFounderStatusUI(card, record);
       } catch (err) {
         console.error("Failed to persist founder status", err);
@@ -2033,8 +2133,17 @@ function createFounderCardHTML(row, contactStatusMap = {}) {
   const businessStage = row.business_stage || "";
   const repeatFounder = row.repeat_founder === true || row.repeat_founder === "true" || String(row.repeat_founder).toLowerCase() === "true";
   const technical = row.technical === true || row.technical === "true" || String(row.technical).toLowerCase() === "true";
-  const entryId = resolveEntryId(row);
+  const rawEntryId = resolveEntryId(row);
+  const entryId = normalizeEntryId(rawEntryId);
   const status = entryId ? (contactStatusMap[entryId] || contactStatusCache.get(entryId)) : undefined;
+  
+  // Debug logging for status resolution
+  if (entryId && !status) {
+    console.debug(`No status found for entryId: ${entryId} (raw: ${rawEntryId})`);
+    console.debug(`Row data - entry_id: ${row.entry_id}, profile_url: ${row.profile_url}`);
+    console.debug(`Available keys in map:`, Object.keys(contactStatusMap).slice(0, 5));
+  }
+  
   const isContacted = status ? Boolean(status.contacted) : false;
   const isInPipeline = status ? Boolean(status.in_pipeline) : false;
   const encodedEntryId = entryId ? encodeURIComponent(entryId) : "";
