@@ -205,14 +205,14 @@ def get_early_deals(category: Optional[Union[str, List[str]]] = None, funding_ro
         query = supabase.table("early_deals").select("*")
         
         # Order by date descending (most recent first)
-        result = query.order("Date", desc=True).execute()
+        result = query.order("date", desc=True).execute()
         deals = result.data
         
-        # Filter out header rows (rows where Company field matches common header strings)
+        # Filter out header rows (rows where company field matches common header strings)
         header_keywords = ["company", "company name", "name"]
         filtered_deals = []
         for deal in deals:
-            company = str(deal.get("Company", "")).strip().lower()
+            company = str(deal.get("company", "")).strip().lower()
             # Skip if company name matches header keywords
             if company and company not in header_keywords:
                 # Additional check: skip if multiple fields match their column names (header row)
@@ -231,7 +231,7 @@ def get_early_deals(category: Optional[Union[str, List[str]]] = None, funding_ro
             
             if category_lower_set:
                 filtered_deals = [d for d in filtered_deals 
-                                if d.get("Category") and str(d.get("Category")).lower().strip() in category_lower_set]
+                                if d.get("category") and str(d.get("category")).lower().strip() in category_lower_set]
         
         if funding_round:
             # Handle both list and single value - normalize filter values
@@ -242,7 +242,7 @@ def get_early_deals(category: Optional[Union[str, List[str]]] = None, funding_ro
             
             if normalized_filters:
                 filtered_deals = [d for d in filtered_deals 
-                                if d.get("Funding Round") and normalize_funding_round(str(d.get("Funding Round"))) in normalized_filters]
+                                if d.get("funding_round") and normalize_funding_round(str(d.get("funding_round"))) in normalized_filters]
         
         return filtered_deals
     except Exception as e:
@@ -261,9 +261,9 @@ def get_deals_categories() -> List[str]:
     try:
         # Select all columns to avoid issues with column names containing spaces
         result = supabase.table("early_deals").select("*").execute()
-        categories_raw = [row.get("Category") for row in result.data if row.get("Category")]
+        categories_raw = [row.get("category") for row in result.data if row.get("category")]
         
-        # Filter out header rows (skip if category matches "Category" or similar)
+        # Filter out header rows (skip if category matches "category" or similar)
         categories_raw = [c for c in categories_raw 
                          if str(c).strip().lower() not in ["category", "categories", ""]]
         
@@ -322,10 +322,10 @@ def get_deals_funding_rounds() -> List[str]:
     try:
         # Select all columns to avoid issues with column names containing spaces
         result = supabase.table("early_deals").select("*").execute()
-        rounds_raw = [row.get("Funding Round") for row in result.data if row.get("Funding Round")]
+        rounds_raw = [row.get("funding_round") for row in result.data if row.get("funding_round")]
         
-        # Filter out header rows (skip if funding round matches "Funding Round" or similar)
-        header_keywords = ["funding round", "funding rounds", "round", "rounds", ""]
+        # Filter out header rows (skip if funding round matches "funding_round" or similar)
+        header_keywords = ["funding round", "funding rounds", "funding_round", "round", "rounds", ""]
         rounds_raw = [r for r in rounds_raw 
                      if str(r).strip().lower() not in header_keywords]
         

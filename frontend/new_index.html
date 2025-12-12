@@ -3103,7 +3103,7 @@ async function loadDashboardDeals() {
     
     // Filter for pre-seed deals (case-insensitive)
     const preSeedDeals = allDeals.filter(deal => {
-      const fundingRound = (deal["Funding Round"] || "").toLowerCase();
+      const fundingRound = (deal.funding_round || deal["funding_round"] || "").toLowerCase();
       return fundingRound.includes("pre-seed") || fundingRound.includes("pre seed");
     });
     
@@ -3133,11 +3133,11 @@ async function loadDashboardDeals() {
 
 // Helper function to create compact deal card HTML for dashboard
 function createDashboardDealCardHTML(deal) {
-  const company = deal.Company || "Unknown";
-  const amount = deal.Amount || "";
-  const investors = formatInvestors(deal.Investors);
-  const date = deal.Date || "";
-  const category = deal.Category || "";
+  const company = deal.company || "Unknown";
+  const amount = deal.amount || "";
+  const investors = formatInvestors(deal.investors);
+  const date = deal.date || "";
+  const category = deal.category || "";
 
   return `
     <div class="space-y-2">
@@ -3804,15 +3804,15 @@ function formatInvestors(investors) {
 
 // Helper function to create deal card HTML
 function createDealCardHTML(deal) {
-  const company = deal.Company || "Unknown";
-  const amount = deal.Amount || "";
-  const fundingRound = deal["Funding Round"] || "";
-  const vertical = deal.Vertical || "";
-  const link = deal.Link || "";
-  const investors = formatInvestors(deal.Investors);
-  const category = deal.Category || "";
-  const source = deal.Source || "";
-  const date = deal.Date || "";
+  const company = deal.company || "Unknown";
+  const amount = deal.amount || "";
+  const fundingRound = deal.funding_round || "";
+  const vertical = deal.vertical || "";
+  const link = deal.link || "";
+  const investors = formatInvestors(deal.investors);
+  const category = deal.category || "";
+  const source = deal.source || "";
+  const date = deal.date || "";
 
   return `
     <div class="space-y-2">
