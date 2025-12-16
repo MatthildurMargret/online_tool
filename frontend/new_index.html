@@ -3101,8 +3101,11 @@ async function loadDashboardDeals() {
     
     const allDeals = json.data || [];
     
+    // Deduplicate deals by company name first
+    const uniqueDeals = deduplicateDealsByCompany(allDeals);
+    
     // Filter for pre-seed deals (case-insensitive)
-    const preSeedDeals = allDeals.filter(deal => {
+    const preSeedDeals = uniqueDeals.filter(deal => {
       const fundingRound = (deal.funding_round || deal["funding_round"] || "").toLowerCase();
       return fundingRound.includes("pre-seed") || fundingRound.includes("pre seed");
     });
@@ -3735,7 +3738,11 @@ async function loadDeals() {
       throw new Error(json.error || "Failed to load deals");
     }
 
-    const deals = json.data || [];
+    const allDeals = json.data || [];
+    
+    // Deduplicate deals by company name
+    const deals = deduplicateDealsByCompany(allDeals);
+    
     loadingEl.classList.add("hidden");
 
     if (!deals.length) {
@@ -3759,6 +3766,34 @@ async function loadDeals() {
     resultsEl.classList.remove("hidden");
     scrollEl.innerHTML = `<p class="text-red-500 px-4">Error loading deals: ${err.message}</p>`;
   }
+}
+
+// Helper function to deduplicate deals by company name (case-insensitive)
+// Keeps the first occurrence (most recent) for each company
+function deduplicateDealsByCompany(deals) {
+  if (!deals || !Array.isArray(deals)) return [];
+  
+  const seen = new Set();
+  const deduplicated = [];
+  
+  for (const deal of deals) {
+    const companyName = (deal.company || deal["company"] || "").trim();
+    if (!companyName) {
+      // Include deals without company names (they won't be duplicates)
+      deduplicated.push(deal);
+      continue;
+    }
+    
+    // Case-insensitive comparison
+    const companyKey = companyName.toLowerCase();
+    
+    if (!seen.has(companyKey)) {
+      seen.add(companyKey);
+      deduplicated.push(deal);
+    }
+  }
+  
+  return deduplicated;
 }
 
 // Helper function to format investors string
