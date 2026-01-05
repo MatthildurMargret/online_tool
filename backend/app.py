@@ -68,7 +68,6 @@ def health():
 def index():
     return send_file(os.path.join(FRONTEND_DIR, "new_index.html"))
 
-
 # ---------------------------------------------------------------------
 # Basic numbers ENDPOINT
 # ---------------------------------------------------------------------
