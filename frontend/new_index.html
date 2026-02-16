@@ -359,6 +359,30 @@
     </div>
   </div>
 
+  <!-- Vertical / Portfolio Comps Section -->
+  <div id="verticalCompsPicker" class="bg-white rounded-xl shadow-lg w-full max-w-3xl p-6 space-y-5 mx-auto">
+    <h3 class="text-lg font-semibold text-gray-800">Vertical / Portfolio Comps</h3>
+    <div class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">By Vertical</label>
+        <input id="verticalInput" type="text" placeholder="e.g. Gaming, Fintech, AI Infrastructure"
+          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">By Portfolio Company</label>
+        <select id="portfolioCompanySelect"
+          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">Select portfolio company</option>
+        </select>
+      </div>
+    </div>
+    <button type="button"
+            onclick="fetchVerticalComps()"
+            class="w-full btn-primary text-white py-3 px-6 rounded-lg font-semibold">
+      Get Comps
+    </button>
+  </div>
+
   <!-- Industry Comparison Section -->
   <div id="industryPicker" class="bg-white rounded-xl shadow-lg w-full max-w-3xl p-6 space-y-5 mx-auto">
     <div>
@@ -1248,6 +1272,7 @@ function showModule(id) {
   // Load map on page load
   document.addEventListener("DOMContentLoaded", () => {
     loadIndustryMap();
+    loadPortfolioCompanies();
     // Load dashboard on initial page load
     loadDashboardRecommendations();
     loadDashboardDeals();
@@ -1265,6 +1290,25 @@ function showModule(id) {
     } catch (e) {
       console.error("industry map load failed", e);
       showError("Failed to load industry map.");
+    }
+  }
+
+  async function loadPortfolioCompanies() {
+    try {
+      const res = await fetch(`${API_URL || ""}/api/portfolio-companies`);
+      const json = await res.json();
+      if (!json.success || !json.data) return;
+      const select = document.getElementById("portfolioCompanySelect");
+      if (!select) return;
+      select.innerHTML = `<option value="">Select portfolio company</option>`;
+      for (const c of json.data) {
+        const opt = document.createElement("option");
+        opt.value = c.id;
+        opt.textContent = c.company_name || c.id;
+        select.appendChild(opt);
+      }
+    } catch (e) {
+      console.error("portfolio companies load failed", e);
     }
   }
 
@@ -1339,34 +1383,27 @@ function showModule(id) {
     }
   }
 
-async function fetchIndustryComparison() {
-  const industry = $("industrySelect").value;
-  const sector = $("sectorSelect").value;
-  const group = $("industryGroupSelect").value;
-  if (!industry || !sector) {
-    showError("Please select at least an industry and sector");
-    return;
-  }
-
-  // Fetch tickers for selection
-  const path = `${industry}/${sector}/${group || ""}`.replace(/\/$/, "");
-  const tickersRes = await fetch(`${API_URL}/api/industry-tickers/${path}`);
-  const tickersJson = await tickersRes.json();
-  const tickers = tickersJson?.data?.tickers || [];
-  if (!tickers.length) {
-    showError("No tickers found");
-    return;
-  }
-
-  // open modal for results
-  openEmptyModal("Industry Comparison");
+async function streamAndRenderComps(tickers, title) {
+  openEmptyModal(title);
   $("modalBody").innerHTML = `<p class="text-gray-600 p-4">Loading ${tickers.length} companies...</p>`;
 
-  const resp = await fetch(`${API_URL}/api/industry-comparison-stream`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tickers }),
-  });
+  let resp;
+  try {
+    resp = await fetch(`${API_URL}/api/industry-comparison-stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tickers }),
+    });
+  } catch (e) {
+    $("modalBody").innerHTML = `<p class="text-red-600 p-4">Failed to connect: ${e.message}</p>`;
+    return;
+  }
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    $("modalBody").innerHTML = `<p class="text-red-600 p-4">Server error (${resp.status}): ${errText.slice(0, 200)}</p>`;
+    return;
+  }
 
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
@@ -1394,17 +1431,21 @@ async function fetchIndustryComparison() {
   const missing = [];
   const validRows = [];
 
-  // --- this replaces the old while loop entirely ---
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+    if (value) buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split("\n");
-    buffer = lines.pop();
+    buffer = done ? "" : lines.pop();
 
     for (const line of lines) {
       if (!line.trim()) continue;
-      const msg = JSON.parse(line);
+      let msg;
+      try {
+        msg = JSON.parse(line);
+      } catch (e) {
+        console.warn("Stream parse error:", line.slice(0, 80), e);
+        continue;
+      }
 
       if (msg.type === "company") {
         const c = msg.data;
@@ -1421,10 +1462,11 @@ async function fetchIndustryComparison() {
       }
 
       if (msg.type === "skip") missing.push(msg.ticker);
+      if (msg.type === "error" && msg.ticker) missing.push(msg.ticker);
     }
+    if (done) break;
   }
 
-  // --- after streaming completes ---
   if (validRows.length) {
     const avg = (key) =>
       validRows.reduce((a, b) => a + (Number(b[key]) || 0), 0) / validRows.length;
@@ -1442,7 +1484,7 @@ async function fetchIndustryComparison() {
 
   if (missing.length) {
     const missHeader = document.createElement("tr");
-    missHeader.innerHTML = `<td colspan="5" class="pt-6 pb-2 font-bold text-gray-700">Tickers with missing data</td>`;
+    missHeader.innerHTML = `<td colspan="6" class="pt-6 pb-2 font-bold text-gray-700">Tickers with missing data</td>`;
     tbody.appendChild(missHeader);
 
     for (const t of missing) {
@@ -1450,10 +1492,85 @@ async function fetchIndustryComparison() {
       tr.className = "text-gray-400 italic";
       tr.innerHTML = `
         <td class="px-4 py-2">${t}</td>
-        <td class="px-4 py-2 text-right" colspan="4">No data available</td>`;
+        <td class="px-4 py-2 text-right" colspan="5">No data available</td>`;
       tbody.appendChild(tr);
     }
   }
+
+  if (validRows.length === 0 && missing.length === 0) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="6" class="px-4 py-6 text-gray-500 text-center">No data received. Check the console for errors.</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+async function fetchIndustryComparison() {
+  const industry = $("industrySelect").value;
+  const sector = $("sectorSelect").value;
+  const group = $("industryGroupSelect").value;
+  if (!industry || !sector) {
+    showError("Please select at least an industry and sector");
+    return;
+  }
+
+  const path = `${industry}/${sector}/${group || ""}`.replace(/\/$/, "");
+  const tickersRes = await fetch(`${API_URL}/api/industry-tickers/${path}`);
+  const tickersJson = await tickersRes.json();
+  const tickers = tickersJson?.data?.tickers || [];
+  if (!tickers.length) {
+    showError("No tickers found");
+    return;
+  }
+
+  await streamAndRenderComps(tickers, "Industry Comparison");
+}
+
+async function fetchVerticalComps() {
+  const vertical = (document.getElementById("verticalInput")?.value || "").trim();
+  const portfolioId = document.getElementById("portfolioCompanySelect")?.value || "";
+
+  if (vertical && portfolioId) {
+    showError("Please use either vertical or portfolio company, not both.");
+    return;
+  }
+  if (!vertical && !portfolioId) {
+    showError("Please enter a vertical or select a portfolio company.");
+    return;
+  }
+
+  let tickers = [];
+  if (portfolioId) {
+    const res = await fetch(`${API_URL}/api/portfolio-companies/${portfolioId}/tickers`);
+    const json = await res.json();
+    if (!json.success) {
+      showError(json.error || "Failed to load portfolio tickers");
+      return;
+    }
+    tickers = json.data?.tickers || [];
+    if (!tickers.length) {
+      showError("No comps configured for this portfolio company.");
+      return;
+    }
+  } else {
+    const res = await fetch(`${API_URL}/api/vertical-tickers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vertical }),
+    });
+    const json = await res.json();
+    if (!json.success) {
+      showError(json.error || "Failed to find relevant tickers");
+      return;
+    }
+    tickers = json.data?.tickers || [];
+    if (!tickers.length) {
+      showError("No relevant tickers found for this vertical.");
+      return;
+    }
+  }
+
+  const title = portfolioId ? "Portfolio Comps" : `Vertical: ${vertical}`;
+  await streamAndRenderComps(tickers, title);
 }
 
 
@@ -1878,6 +1995,42 @@ function attachContactStatusHandlers(card, row) {
   });
 }
 
+function getAccessDateTimestamp(row) {
+  if (!row || !row.access_date) return Number.NEGATIVE_INFINITY;
+  const timestamp = new Date(row.access_date).getTime();
+  return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
+}
+
+function sortFoundersByAccessDateDesc(rows) {
+  if (!Array.isArray(rows)) return [];
+  return [...rows].sort((a, b) => getAccessDateTimestamp(b) - getAccessDateTimestamp(a));
+}
+
+function getFounderCompanyKey(row) {
+  if (!row) return "";
+  const companyName = clean(row.company_name || row.Company_Name || row.company || row.Company || "");
+  return companyName.toLowerCase();
+}
+
+function dedupeFoundersByCompany(rows) {
+  if (!Array.isArray(rows)) return [];
+  const seen = new Set();
+  const deduped = [];
+
+  for (const row of rows) {
+    const companyKey = getFounderCompanyKey(row);
+    if (!companyKey) {
+      deduped.push(row);
+      continue;
+    }
+    if (seen.has(companyKey)) continue;
+    seen.add(companyKey);
+    deduped.push(row);
+  }
+
+  return deduped;
+}
+
 async function loadFounders(endpoint) {
   $("foundersLoading").classList.remove("hidden");
   $("foundersResults").classList.add("hidden");
@@ -1891,10 +2044,7 @@ async function loadFounders(endpoint) {
       }
     });
     const json = await res.json();
-    let data = json.data || [];
-
-    // sort descending by access_date
-    data.sort((a, b) => new Date(b.access_date) - new Date(a.access_date));
+    const data = sortFoundersByAccessDateDesc(json.data || []);
 
     $("foundersLoading").classList.add("hidden");
     $("foundersResults").classList.remove("hidden");
@@ -2194,11 +2344,7 @@ async function searchFounders() {
       throw new Error("Invalid response from server");
     });
     
-    const data = (json.data || []).sort((a, b) => {
-      const aDate = a.access_date ? new Date(a.access_date) : 0;
-      const bDate = b.access_date ? new Date(b.access_date) : 0;
-      return bDate - aDate;
-    });
+    const data = sortFoundersByAccessDateDesc(json.data || []);
 
     $("foundersLoading").classList.add("hidden");
 
@@ -2975,11 +3121,7 @@ async function loadRecommendedFiltered() {
       headers: { "x-api-key": API_KEY }
     });
     const json = await res.json();
-    const data = (json.data || []).sort((a, b) => {
-      const aDate = a.access_date ? new Date(a.access_date) : 0;
-      const bDate = b.access_date ? new Date(b.access_date) : 0;
-      return bDate - aDate;
-    });
+    const data = sortFoundersByAccessDateDesc(json.data || []);
 
     $("foundersLoading").classList.add("hidden");
 
@@ -3031,11 +3173,8 @@ async function loadDashboardRecommendations() {
       headers: { "x-api-key": API_KEY }
     });
     const json = await res.json();
-    const data = (json.data || []).sort((a, b) => {
-      const aDate = a.access_date ? new Date(a.access_date) : 0;
-      const bDate = b.access_date ? new Date(b.access_date) : 0;
-      return bDate - aDate;
-    });
+    const sortedData = sortFoundersByAccessDateDesc(json.data || []);
+    const data = dedupeFoundersByCompany(sortedData);
 
     loadingEl.classList.add("hidden");
 

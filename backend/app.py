@@ -28,7 +28,10 @@ from supabase_db import (
     get_all_users_from_tree,
     get_user_tags,
     get_all_category_paths,
-    batch_update_user_tags
+    batch_update_user_tags,
+    get_portfolio_companies,
+    get_portfolio_company_tickers,
+    get_all_tickers_with_financials,
 )
 from utils.stock_price import get_price_with_cache
 from utils.formatting import clean_nans
@@ -265,7 +268,7 @@ def industry_comparison_stream():
                 cached = get_industry_cache(cache_key)
                 if cached:
                     for row in cached:
-                        yield json.dumps({"type": "company", "data": row}) + "\n"
+                        yield json.dumps({"type": "company", "data": clean_nans(row)}) + "\n"
                     yield json.dumps({"type": "complete", "processed": len(cached), "total": len(cached)}) + "\n"
                     return
 
@@ -295,7 +298,7 @@ def industry_comparison_stream():
                         processed += 1
                         continue
 
-                    row = {
+                    row = clean_nans({
                         "ticker": ticker,
                         "company_name": numbers.get("company_name"),
                         "revenue": numbers["revenue"],
@@ -305,7 +308,7 @@ def industry_comparison_stream():
                         "pe": metrics["pe"],
                         "ps": metrics["ps"],
                         "market_cap": metrics["market_cap"],
-                    }
+                    })
 
                     results.append(row)
                     yield json.dumps({"type": "company", "data": row}) + "\n"
@@ -331,6 +334,126 @@ def industry_comparison_stream():
         mimetype="application/x-ndjson",
         headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
+
+
+# ---------------------------------------------------------------------
+# VERTICAL / PORTFOLIO COMPS ENDPOINTS
+# ---------------------------------------------------------------------
+
+_ticker_index_cache = None
+_ticker_index_cache_ts = 0
+TICKER_INDEX_TTL = 3600  # 1 hour
+
+
+def _build_ticker_index():
+    """Build ticker -> (company_name, industry, sector, group) for LLM context. Cached."""
+    global _ticker_index_cache, _ticker_index_cache_ts
+    if _ticker_index_cache is not None and (time.time() - _ticker_index_cache_ts) < TICKER_INDEX_TTL:
+        return _ticker_index_cache
+
+    # Load industry map for reverse lookup
+    industry_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "industry_map.json")
+    ticker_to_industry = {}
+    if os.path.exists(industry_path):
+        with open(industry_path, "r") as f:
+            industry_map = json.load(f)
+        for industry, ind_data in industry_map.get("industries", {}).items():
+            for sector, sec_data in ind_data.get("sectors", {}).items():
+                for group, tickers in sec_data.get("industry_groups", {}).items():
+                    for t in tickers:
+                        ticker_to_industry[t.upper()] = (industry, sector, group)
+
+    # Get all tickers with financials and company names
+    valid_tickers = set(get_all_tickers_with_financials())
+    index = []
+    for ticker in sorted(valid_tickers):
+        fin = get_company_financials(ticker)
+        company_name = (fin or {}).get("company_name") or ticker
+        ind_info = ticker_to_industry.get(ticker, (None, None, None))
+        industry, sector, group = ind_info
+        ctx = f"{ticker} - {company_name}"
+        if industry:
+            ctx += f" ({industry}, {sector}, {group})"
+        index.append({"ticker": ticker, "context": ctx})
+
+    _ticker_index_cache = index
+    _ticker_index_cache_ts = time.time()
+    return index
+
+
+@app.route("/api/portfolio-companies", methods=["GET"])
+def get_portfolio_companies_endpoint():
+    """Get list of portfolio companies for the comps dropdown."""
+    try:
+        companies = get_portfolio_companies()
+        return jsonify({"success": True, "data": companies})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/portfolio-companies/<company_id>/tickers", methods=["GET"])
+def get_portfolio_company_tickers_endpoint(company_id):
+    """Get tickers for a portfolio company, filtered to those in our financial DB."""
+    try:
+        tickers = get_portfolio_company_tickers(company_id)
+        return jsonify({"success": True, "data": {"tickers": tickers}})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/vertical-tickers", methods=["POST"])
+def get_vertical_tickers():
+    """Use LLM to find 5-6 relevant tickers for a given vertical. Returns only tickers in our DB."""
+    try:
+        payload = request.get_json(force=True) or {}
+        vertical = (payload.get("vertical") or "").strip()
+        if not vertical:
+            return jsonify({"success": False, "error": "vertical is required"}), 400
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return jsonify({"success": False, "error": "OPENAI_API_KEY not configured"}), 503
+
+        index = _build_ticker_index()
+        if not index:
+            return jsonify({"success": False, "error": "No tickers in financial database"}), 503
+
+        valid_tickers = {x["ticker"] for x in index}
+        context_lines = [x["context"] for x in index]
+
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+
+        prompt = f"""Given the vertical "{vertical}" and the following list of public companies in our database (ticker - company name, and optionally industry/sector/group), select exactly 5-6 ticker symbols that are most relevant to this vertical.
+
+IMPORTANT: Return ONLY ticker symbols from the list below. Do not invent or use tickers not in the list.
+
+Companies in database:
+{chr(10).join(context_lines[:500])}
+"""
+
+        if len(context_lines) > 500:
+            prompt += f"\n... and {len(context_lines) - 500} more companies."
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+        )
+        content = response.choices[0].message.content
+        parsed = json.loads(content)
+        raw_tickers = parsed.get("tickers", [])
+        tickers = [str(t).upper() for t in raw_tickers if t]
+        tickers = [t for t in tickers if t in valid_tickers][:6]
+
+        return jsonify({"success": True, "data": {"tickers": tickers}})
+    except json.JSONDecodeError as e:
+        return jsonify({"success": False, "error": f"Invalid LLM response: {e}"}), 503
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 503
 
 
 # ---------------------------------------------------------------------

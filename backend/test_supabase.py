@@ -188,19 +188,59 @@ def get_reported_numbers(ticker):
     results = get_company_financials(ticker)
     if results is None:
         print("No results for", ticker)
-        return None 
-    raw_data = json.loads(results["raw_data"])
+        return None
+    raw_data = results.get("raw_data")
+    if raw_data is None:
+        return None
+    if isinstance(raw_data, str):
+        raw_data = json.loads(raw_data)
+    elif not isinstance(raw_data, dict):
+        return None
     if "filing_metadata" not in raw_data:
         print("No filing metadata for", ticker)
         return None 
     filing_metadata = raw_data["filing_metadata"]
     type, filing = quarterly_or_annual(filing_metadata)  
 
+    def _is_valid_num(v):
+        import math
+        if v is None:
+            return False
+        if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+            return False
+        return v > 0
+
     most_recent_numbers = get_most_recent_numbers(raw_data, type, filing)
-    most_recent_numbers['company_name'] = results['company_name']
-    if most_recent_numbers:
+    if most_recent_numbers is not None and _is_valid_num(most_recent_numbers.get("revenue")) and _is_valid_num(most_recent_numbers.get("eps")):
+        most_recent_numbers['company_name'] = results['company_name']
         return most_recent_numbers
-    return None
+
+    # Fallback: use pre-computed columns from company_financials when raw_data parsing fails or returns NaN
+    # (e.g. different raw_data structure, label mismatches, or "No valid quarters")
+    revenue = results.get("revenue")
+    shares = results.get("shares_outstanding")
+    income = results.get("income")
+    eps = results.get("latest_eps")
+    if revenue is None or revenue <= 0:
+        return None
+    # Resolve eps: use latest_eps, or compute from income/shares
+    if eps is None or (isinstance(eps, float) and (eps != eps or eps <= 0)):
+        eps = income / shares if income is not None and shares and shares > 0 else None
+    if eps is None or eps <= 0:
+        return None
+    # Resolve shares: use from DB, or derive from income/eps
+    shares_out = shares
+    if (shares_out is None or shares_out <= 0) and income is not None and eps and eps > 0:
+        shares_out = income / eps
+    if shares_out is None or shares_out <= 0:
+        return None
+    return {
+        "company_name": results.get("company_name"),
+        "revenue": revenue,
+        "net_income": income,
+        "eps": eps,
+        "shares_outstanding": shares_out,
+    }
 
 def compute_metrics(numbers, price):
     # We want P/E, P/S, market cap 
@@ -213,9 +253,9 @@ def compute_metrics(numbers, price):
 def get_price(ticker):
     ALPACA_API_KEY = os.getenv("ALPACA_API")
     ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET")
-
+    alpaca_client = None
     if ALPACA_API_KEY and ALPACA_SECRET_KEY:
-        alpaca_client = StockHistoricalDataClient(ALPACA_API_KEY, ALPACA_SECRET_KEY)    
+        alpaca_client = StockHistoricalDataClient(ALPACA_API_KEY, ALPACA_SECRET_KEY)
     price_payload, _ = get_price_with_cache(alpaca_client, ticker)
     price = price_payload.get("price") or price_payload.get("latest_price")
     return price

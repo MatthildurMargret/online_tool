@@ -191,6 +191,64 @@ def update_valuation_metrics(ticker: str, valuation_metrics: Dict) -> bool:
         return False
 
 
+def get_portfolio_companies() -> List[Dict]:
+    """
+    Retrieve all portfolio companies for the comps dropdown.
+    Returns list of dicts with id and company_name.
+    """
+    if not supabase:
+        raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
+
+    try:
+        result = (
+            supabase.table("portfolio_companies")
+            .select("id, company_name")
+            .order("company_name")
+            .execute()
+        )
+        return result.data or []
+    except Exception as e:
+        print(f"Error retrieving portfolio companies: {e}")
+        return []
+
+
+def get_portfolio_company_tickers(company_id: str) -> List[str]:
+    """
+    Get the tickers array for a portfolio company.
+    Returns only tickers that exist in company_financials.
+    """
+    if not supabase:
+        raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
+
+    try:
+        result = (
+            supabase.table("portfolio_companies")
+            .select("tickers")
+            .eq("id", company_id)
+            .execute()
+        )
+        if not result.data:
+            return []
+
+        row = result.data[0]
+        tickers_raw = row.get("tickers")
+        if not tickers_raw:
+            return []
+
+        # tickers can be jsonb array or already a list
+        if isinstance(tickers_raw, str):
+            import json
+            tickers_raw = json.loads(tickers_raw) if tickers_raw else []
+        tickers = [str(t).upper() for t in tickers_raw] if tickers_raw else []
+
+        # Filter to only tickers that exist in our financial database
+        valid_tickers = set(get_all_tickers_with_financials())
+        return [t for t in tickers if t in valid_tickers]
+    except Exception as e:
+        print(f"Error retrieving portfolio company tickers: {e}")
+        return []
+
+
 def get_early_deals(category: Optional[Union[str, List[str]]] = None, funding_round: Optional[Union[str, List[str]]] = None) -> List[Dict]:
     """
     Retrieve early deals from Supabase
