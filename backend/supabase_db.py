@@ -6,7 +6,7 @@ Handles all interactions with the Supabase database
 import os
 import re
 import copy
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List, Union
 from supabase import create_client, Client
 from dotenv import load_dotenv
@@ -191,6 +191,99 @@ def update_valuation_metrics(ticker: str, valuation_metrics: Dict) -> bool:
         return False
 
 
+# ---------------------------------------------------------------------
+# GEMINI FINANCIALS (portfolio/vertical comps)
+# ---------------------------------------------------------------------
+
+GEMINI_FINANCIALS_STALE_DAYS = 90
+
+
+def get_gemini_financials(ticker: str) -> Optional[Dict]:
+    """
+    Retrieve Gemini-sourced financial data for a ticker.
+    Returns None if not found.
+    """
+    if not supabase:
+        raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
+
+    try:
+        result = supabase.table("gemini_financials").select("*").eq("ticker", ticker.upper()).execute()
+        if not result.data:
+            return None
+        return result.data[0]
+    except Exception as e:
+        print(f"Error retrieving gemini financials for {ticker}: {e}")
+        return None
+
+
+def get_gemini_financials_batch(tickers: List[str]) -> Dict[str, Dict]:
+    """
+    Fetch Gemini financials for multiple tickers.
+    Returns dict mapping ticker -> row (only for tickers that exist).
+    """
+    if not supabase or not tickers:
+        return {}
+
+    try:
+        tickers_upper = [t.upper() for t in tickers]
+        result = supabase.table("gemini_financials").select("*").in_("ticker", tickers_upper).execute()
+        return {row["ticker"]: row for row in (result.data or [])}
+    except Exception as e:
+        print(f"Error batch retrieving gemini financials: {e}")
+        return {}
+
+
+def is_gemini_financials_fresh(row: Dict) -> bool:
+    """Check if gemini_financials row is fresh (fetched within last 3 months)."""
+    fetched_at = row.get("fetched_at")
+    if not fetched_at:
+        return False
+    try:
+        if isinstance(fetched_at, str):
+            fetched_dt = datetime.fromisoformat(fetched_at.replace("Z", "+00:00"))
+        else:
+            fetched_dt = fetched_at
+        if fetched_dt.tzinfo is None:
+            fetched_dt = fetched_dt.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        return (now - fetched_dt) < timedelta(days=GEMINI_FINANCIALS_STALE_DAYS)
+    except Exception:
+        return False
+
+
+def upsert_gemini_financials(data: Dict) -> bool:
+    """
+    Insert or update a row in gemini_financials.
+    data must include 'ticker' and financial fields. fetched_at is set automatically.
+    """
+    if not supabase:
+        raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
+
+    def _to_float(v):
+        if v is None:
+            return None
+        if isinstance(v, (int, float)):
+            return float(v) if abs(v) != float("inf") and v == v else None
+        return None
+
+    try:
+        row = {
+            "ticker": str(data.get("ticker", "")).upper(),
+            "company_name": data.get("company_name") or None,
+            "revenue": _to_float(data.get("revenue")),
+            "shares_outstanding": _to_float(data.get("shares_outstanding")),
+            "ebitda": _to_float(data.get("ebitda")),
+            "net_debt": _to_float(data.get("net_debt")),
+            "gross_profit": _to_float(data.get("gross_profit")),
+            "fetched_at": datetime.now().isoformat(),
+        }
+        supabase.table("gemini_financials").upsert(row).execute()
+        return True
+    except Exception as e:
+        print(f"Error upserting gemini financials for {data.get('ticker', '?')}: {e}")
+        return False
+
+
 def get_portfolio_companies() -> List[Dict]:
     """
     Retrieve all portfolio companies for the comps dropdown.
@@ -215,7 +308,7 @@ def get_portfolio_companies() -> List[Dict]:
 def get_portfolio_company_tickers(company_id: str) -> List[str]:
     """
     Get the tickers array for a portfolio company.
-    Returns only tickers that exist in company_financials.
+    Used for portfolio comps; data is fetched via Gemini (portfolio-comparison-stream).
     """
     if not supabase:
         raise Exception("Supabase client not initialized. Check your SUPABASE_URL and SUPABASE_KEY.")
@@ -239,11 +332,7 @@ def get_portfolio_company_tickers(company_id: str) -> List[str]:
         if isinstance(tickers_raw, str):
             import json
             tickers_raw = json.loads(tickers_raw) if tickers_raw else []
-        tickers = [str(t).upper() for t in tickers_raw] if tickers_raw else []
-
-        # Filter to only tickers that exist in our financial database
-        valid_tickers = set(get_all_tickers_with_financials())
-        return [t for t in tickers if t in valid_tickers]
+        return [str(t).upper() for t in tickers_raw] if tickers_raw else []
     except Exception as e:
         print(f"Error retrieving portfolio company tickers: {e}")
         return []

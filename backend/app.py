@@ -32,9 +32,14 @@ from supabase_db import (
     get_portfolio_companies,
     get_portfolio_company_tickers,
     get_all_tickers_with_financials,
+    get_gemini_financials,
+    get_gemini_financials_batch,
+    is_gemini_financials_fresh,
+    upsert_gemini_financials,
 )
 from utils.stock_price import get_price_with_cache
 from utils.formatting import clean_nans
+from utils.portfolio_metrics import build_portfolio_output_row
 from utils.prospecting import build_query, google_search
 
 # ---------------------------------------------------------------------
@@ -139,6 +144,43 @@ def get_stock_price(ticker):
         return jsonify({"success": True, "data": payload, "cached": cached})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+# ---------------------------------------------------------------------
+# SINGLE STOCK ENDPOINT (Gemini + Alpaca pipeline, same as portfolio comps)
+# ---------------------------------------------------------------------
+@app.route("/api/single-stock/<ticker>", methods=["GET"])
+def get_single_stock(ticker):
+    """Get financial data for one ticker using Gemini + Alpaca (same pipeline as portfolio comps)."""
+    ticker = ticker.upper()
+    try:
+        # 1. Get price from Alpaca
+        price_payload, _ = get_price_with_cache(alpaca_client, ticker)
+        price = (price_payload or {}).get("price") if price_payload else None
+        if not price:
+            return jsonify({"success": False, "error": "No price data"}), 404
+
+        # 2. Get Gemini data (cached or fetch)
+        from services.gemini_financials import fetch_ticker_via_gemini
+
+        row = get_gemini_financials(ticker)
+        if not row or not is_gemini_financials_fresh(row):
+            data = fetch_ticker_via_gemini(ticker)
+            if not data or not data.get("revenue") or not data.get("shares_outstanding"):
+                return jsonify({"success": False, "error": "Missing financial data"}), 404
+            upsert_gemini_financials(data)
+            row = data
+
+        if not row.get("revenue") or not row.get("shares_outstanding"):
+            return jsonify({"success": False, "error": "Missing financial data"}), 404
+
+        # 3. Build output (same as portfolio stream)
+        out = build_portfolio_output_row(ticker, row, price, clean_nans)
+        out["price"] = price  # Include for single-stock display
+        return jsonify({"success": True, "data": out})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 # ---------------------------------------------------------------------
 # Valuation metrics ENDPOINT
@@ -260,6 +302,8 @@ def industry_comparison_stream():
                 yield json.dumps({"type": "error", "error": "No tickers provided"}) + "\n"
                 return
 
+            # Yield immediately so the client gets response headers and can show loading UI
+            yield json.dumps({"type": "progress", "processed": 0, "total": len(tickers)}) + "\n"
             cache_key = "tickers:" + ",".join(sorted(tickers))
             print(f"[STREAM] Starting industry comparison for {len(tickers)} tickers")
 
@@ -322,6 +366,85 @@ def industry_comparison_stream():
 
             if results:
                 set_industry_cache(cache_key, results)
+
+            yield json.dumps({"type": "complete", "processed": processed, "total": len(tickers)}) + "\n"
+
+        except Exception as e:
+            traceback.print_exc()
+            yield json.dumps({"type": "error", "error": str(e)}) + "\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="application/x-ndjson",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )
+
+
+# ---------------------------------------------------------------------
+# PORTFOLIO / VERTICAL COMPARISON STREAM (Gemini-sourced)
+# ---------------------------------------------------------------------
+
+
+@app.route("/api/portfolio-comparison-stream", methods=["POST"])
+def portfolio_comparison_stream():
+    def generate():
+        try:
+            payload = request.get_json(force=True) or {}
+            tickers = [t.upper() for t in payload.get("tickers", [])]
+            if not tickers:
+                yield json.dumps({"type": "error", "error": "No tickers provided"}) + "\n"
+                return
+
+            # Yield immediately so the client gets response headers and can show loading UI
+            yield json.dumps({"type": "progress", "processed": 0, "total": len(tickers)}) + "\n"
+            print(f"[STREAM] Starting portfolio comparison for {len(tickers)} tickers")
+
+            from services.gemini_financials import fetch_ticker_via_gemini
+
+            cached = get_gemini_financials_batch(tickers)
+            processed = 0
+            gemini_calls_made = 0
+
+            for ticker in tickers:
+                try:
+                    # 1. Get price from Alpaca (same as industry comps)
+                    price_payload, _ = get_price_with_cache(alpaca_client, ticker)
+                    price = (price_payload or {}).get("price") if price_payload else None
+                    if not price:
+                        yield json.dumps({"type": "skip", "ticker": ticker, "reason": "No price"}) + "\n"
+                        processed += 1
+                        continue
+
+                    # 2. Get Gemini data (cached or fetch)
+                    row = cached.get(ticker)
+                    if not row or not is_gemini_financials_fresh(row):
+                        import time
+                        if gemini_calls_made > 0:
+                            time.sleep(5)
+                        data = fetch_ticker_via_gemini(ticker)
+                        gemini_calls_made += 1
+                        if not data or not data.get("revenue") or not data.get("shares_outstanding"):
+                            yield json.dumps({"type": "skip", "ticker": ticker, "reason": "Missing data"}) + "\n"
+                            processed += 1
+                            continue
+                        upsert_gemini_financials(data)
+                        row = data
+
+                    if not row.get("revenue") or not row.get("shares_outstanding"):
+                        yield json.dumps({"type": "skip", "ticker": ticker, "reason": "Missing data"}) + "\n"
+                        processed += 1
+                        continue
+
+                    # 3. Build output (same logic as test script: compute metrics from Gemini + price)
+                    out = build_portfolio_output_row(ticker, row, price, clean_nans)
+                    yield json.dumps({"type": "company", "data": out}) + "\n"
+
+                except Exception as e:
+                    print(f"[STREAM] Error {ticker}: {e}")
+                    yield json.dumps({"type": "skip", "ticker": ticker, "reason": str(e)}) + "\n"
+
+                processed += 1
+                yield json.dumps({"type": "progress", "processed": processed, "total": len(tickers)}) + "\n"
 
             yield json.dumps({"type": "complete", "processed": processed, "total": len(tickers)}) + "\n"
 
@@ -405,49 +528,19 @@ def get_portfolio_company_tickers_endpoint(company_id):
 
 @app.route("/api/vertical-tickers", methods=["POST"])
 def get_vertical_tickers():
-    """Use LLM to find 5-6 relevant tickers for a given vertical. Returns only tickers in our DB."""
+    """Use Gemini with grounding to suggest 5-6 relevant public tickers for a vertical."""
     try:
         payload = request.get_json(force=True) or {}
         vertical = (payload.get("vertical") or "").strip()
         if not vertical:
             return jsonify({"success": False, "error": "vertical is required"}), 400
 
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            return jsonify({"success": False, "error": "OPENAI_API_KEY not configured"}), 503
+        if not os.getenv("GEMINI_API_KEY"):
+            return jsonify({"success": False, "error": "GEMINI_API_KEY not configured"}), 503
 
-        index = _build_ticker_index()
-        if not index:
-            return jsonify({"success": False, "error": "No tickers in financial database"}), 503
+        from services.gemini_financials import suggest_tickers_for_vertical
 
-        valid_tickers = {x["ticker"] for x in index}
-        context_lines = [x["context"] for x in index]
-
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-
-        prompt = f"""Given the vertical "{vertical}" and the following list of public companies in our database (ticker - company name, and optionally industry/sector/group), select exactly 5-6 ticker symbols that are most relevant to this vertical.
-
-IMPORTANT: Return ONLY ticker symbols from the list below. Do not invent or use tickers not in the list.
-
-Companies in database:
-{chr(10).join(context_lines[:500])}
-"""
-
-        if len(context_lines) > 500:
-            prompt += f"\n... and {len(context_lines) - 500} more companies."
-
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-        )
-        content = response.choices[0].message.content
-        parsed = json.loads(content)
-        raw_tickers = parsed.get("tickers", [])
-        tickers = [str(t).upper() for t in raw_tickers if t]
-        tickers = [t for t in tickers if t in valid_tickers][:6]
-
+        tickers = suggest_tickers_for_vertical(vertical)
         return jsonify({"success": True, "data": {"tickers": tickers}})
     except json.JSONDecodeError as e:
         return jsonify({"success": False, "error": f"Invalid LLM response: {e}"}), 503

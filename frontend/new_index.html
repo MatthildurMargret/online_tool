@@ -346,41 +346,55 @@
         <p id="stockPrice" class="text-xl font-semibold text-green-600"></p>
       </div>
 
-      <div class="grid grid-cols-2 gap-3">
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div class="bg-gray-50 p-3 rounded-lg"><p class="text-xs text-gray-500">Revenue</p><p id="revenue" class="font-semibold text-gray-800">—</p></div>
-        <div class="bg-gray-50 p-3 rounded-lg"><p class="text-xs text-gray-500">P/E</p><p id="pe" class="font-semibold text-gray-800">—</p></div>
         <div class="bg-gray-50 p-3 rounded-lg"><p class="text-xs text-gray-500">P/S</p><p id="ps" class="font-semibold text-gray-800">—</p></div>
         <div class="bg-gray-50 p-3 rounded-lg"><p class="text-xs text-gray-500">Market Cap</p><p id="marketCap" class="font-semibold text-gray-800">—</p></div>
+        <div class="bg-gray-50 p-3 rounded-lg"><p class="text-xs text-gray-500">EBITDA</p><p id="ebitda" class="font-semibold text-gray-800">—</p></div>
+        <div class="bg-gray-50 p-3 rounded-lg"><p class="text-xs text-gray-500">EV</p><p id="ev" class="font-semibold text-gray-800">—</p></div>
+        <div class="bg-gray-50 p-3 rounded-lg"><p class="text-xs text-gray-500">EV/EBITDA</p><p id="evEbitda" class="font-semibold text-gray-800">—</p></div>
+        <div class="bg-gray-50 p-3 rounded-lg"><p class="text-xs text-gray-500">EV/Rev</p><p id="evRevenue" class="font-semibold text-gray-800">—</p></div>
+        <div class="bg-gray-50 p-3 rounded-lg"><p class="text-xs text-gray-500">Gross Margin</p><p id="grossMargin" class="font-semibold text-gray-800">—</p></div>
+        <div class="bg-gray-50 p-3 rounded-lg"><p class="text-xs text-gray-500">EBITDA Margin</p><p id="ebitdaMargin" class="font-semibold text-gray-800">—</p></div>
       </div>
-
-      <button onclick="openModal()" class="w-full text-sm mt-2 py-2 rounded-lg border border-gray-300 hover:bg-gray-100">
-        View Full Income Statement →
-      </button>
     </div>
   </div>
 
   <!-- Vertical / Portfolio Comps Section -->
   <div id="verticalCompsPicker" class="bg-white rounded-xl shadow-lg w-full max-w-3xl p-6 space-y-5 mx-auto">
     <h3 class="text-lg font-semibold text-gray-800">Vertical / Portfolio Comps</h3>
-    <div class="space-y-4">
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">By Vertical</label>
-        <input id="verticalInput" type="text" placeholder="e.g. Gaming, Fintech, AI Infrastructure"
-          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">By Portfolio Company</label>
-        <select id="portfolioCompanySelect"
-          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="">Select portfolio company</option>
-        </select>
-      </div>
+    <div class="flex gap-6 mb-4">
+      <label class="flex items-center gap-2 cursor-pointer" onclick="window.switchCompsMode('vertical')">
+        <input type="radio" name="compsMode" value="vertical" checked
+          onchange="window.switchCompsMode('vertical')"
+          class="w-4 h-4 text-blue-600 focus:ring-blue-500" />
+        <span class="text-sm font-medium text-gray-700">By Vertical</span>
+      </label>
+      <label class="flex items-center gap-2 cursor-pointer" onclick="window.switchCompsMode('portfolio')">
+        <input type="radio" name="compsMode" value="portfolio"
+          onchange="window.switchCompsMode('portfolio')"
+          class="w-4 h-4 text-blue-600 focus:ring-blue-500" />
+        <span class="text-sm font-medium text-gray-700">By Portfolio Company</span>
+      </label>
+    </div>
+    <div id="verticalInputContainer" class="space-y-4">
+      <label class="block text-sm font-medium text-gray-700 mb-2">Vertical</label>
+      <input id="verticalInput" type="text" placeholder="e.g. Gaming, Fintech, AI Infrastructure"
+        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+    </div>
+    <div id="portfolioCompanyContainer" class="space-y-4 hidden">
+      <label class="block text-sm font-medium text-gray-700 mb-2">Portfolio Company</label>
+      <select id="portfolioCompanySelect"
+        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <option value="">Select portfolio company</option>
+      </select>
     </div>
     <button type="button"
-            onclick="fetchVerticalComps()"
+            onclick="window.fetchVerticalComps()"
             class="w-full btn-primary text-white py-3 px-6 rounded-lg font-semibold">
       Get Comps
     </button>
+    <div id="verticalCompsError" class="hidden mt-2 text-sm text-red-600"></div>
   </div>
 
   <!-- Industry Comparison Section -->
@@ -422,15 +436,6 @@
 
 </div>
 
-
-  <div id="modalOverlay" class="hidden fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center" onclick="closeModal()"></div>
-  <div id="modal" class="hidden fixed inset-8 bg-white rounded-xl shadow-2xl z-50 overflow-auto p-6">
-    <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-bold text-brand">Income Statement</h2>
-        <button onclick="closeModal()" class="text-2xl leading-none text-gray-700">×</button>
-    </div>
-    <div id="modalBody"></div>
-    </div>
     </div> <!-- end valuationModule -->
     <div id="foundersModule" class="hidden">
   <div class="module-card rounded-xl w-full p-6 space-y-4">
@@ -968,7 +973,16 @@
     </div>
 
   </main>
-</body>
+
+  <!-- Global modal (outside modules so overlay never blocks interaction) -->
+  <div id="modalOverlay" class="hidden fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center" onclick="closeModal()"></div>
+  <div id="modal" class="hidden fixed inset-8 bg-white rounded-xl shadow-2xl z-50 overflow-auto p-6">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-bold text-brand">Income Statement</h2>
+      <button onclick="closeModal()" class="text-2xl leading-none text-gray-700">×</button>
+    </div>
+    <div id="modalBody"></div>
+  </div>
 
 <script>
 // Toggle sidebar on mobile
@@ -1033,6 +1047,15 @@ function showModule(id) {
   if (id === "interestingPeopleModule") {
     loadInterestingPeople();
   }
+
+  if (id === "valuationModule" && typeof loadPortfolioCompanies === "function") {
+    loadPortfolioCompanies();
+  }
+
+  // Ensure modal is closed when switching modules (prevents overlay blocking interaction)
+  if (typeof closeModal === "function") {
+    closeModal();
+  }
 }
 
 
@@ -1075,42 +1098,27 @@ function showModule(id) {
         hideError(); $("results").classList.add("hidden"); $("loading").classList.remove("hidden");
 
         try {
-            async function safeFetchJSON(url) {
-            const res = await fetch(url);
-            const text = await res.text();
-            const cleanText = text
-                .replace(/\b-?Infinity\b/g, "null") // handles Infinity and -Infinity
-                .replace(/\bNaN\b/g, "null");
-            return JSON.parse(cleanText);
-            }
-
-            const [finRes, incRes, priceRes, valRes] = await Promise.all([
-            safeFetchJSON(`${API_URL}/api/financials/${ticker}`),
-            safeFetchJSON(`${API_URL}/api/income/${ticker}`),
-            safeFetchJSON(`${API_URL}/api/stock-price/${ticker}`),
-            safeFetchJSON(`${API_URL}/api/valuation/${ticker}`),
-            ]);
+            const res = await fetch(`${API_URL}/api/single-stock/${ticker}`);
+            const json = await res.json();
 
             $("loading").classList.add("hidden");
 
-            if (!finRes.success || !priceRes.success || !valRes.success) {
-            return showError("Unable to retrieve data for this ticker.");
+            if (!json.success || !json.data) {
+            return showError(json.error || "Unable to retrieve data for this ticker.");
             }
 
-            $("companyHeader").textContent = ticker;
-            $("stockPrice").textContent = priceRes.data?.price ? `$${priceRes.data.price.toFixed(2)}` : "N/A";
-            $("revenue").textContent = fmtNum(finRes.data?.revenue);
-            $("pe").textContent = valRes.data?.pe ? valRes.data.pe.toFixed(2) : "N/A";
-            $("ps").textContent = valRes.data?.ps ? valRes.data.ps.toFixed(2) : "N/A";
-            $("marketCap").textContent = fmtNum(valRes.data?.market_cap);
-
-            if (incRes?.success) {
-            window.latestIncome = incRes.data?.income_statement || null;
-            window.fullFinancials = incRes.data || null;
-            } else {
-            window.latestIncome = null;
-            window.fullFinancials = null;
-            }
+            const d = json.data;
+            $("companyHeader").textContent = d.company_name || ticker;
+            $("stockPrice").textContent = d.price != null ? fmtNum(d.price) : "N/A";
+            $("revenue").textContent = fmtNum(d.revenue);
+            $("ps").textContent = d.ps != null ? d.ps.toFixed(2) : "N/A";
+            $("marketCap").textContent = fmtNum(d.market_cap);
+            $("ebitda").textContent = fmtNum(d.ebitda);
+            $("ev").textContent = fmtNum(d.ev);
+            $("evEbitda").textContent = d.ev_ebitda != null ? d.ev_ebitda.toFixed(2) : "N/A";
+            $("evRevenue").textContent = d.ev_revenue != null ? d.ev_revenue.toFixed(2) : "N/A";
+            $("grossMargin").textContent = d.gross_margin != null ? (d.gross_margin * 100).toFixed(1) + "%" : "N/A";
+            $("ebitdaMargin").textContent = d.ebitda_margin != null ? (d.ebitda_margin * 100).toFixed(1) + "%" : "N/A";
 
             $("results").classList.remove("hidden");
         } catch (err) {
@@ -1120,8 +1128,15 @@ function showModule(id) {
         }
         }
 
-    function showError(msg){$("errorBox").textContent=msg;$("errorBox").classList.remove("hidden");}
-    function hideError(){$("errorBox").classList.add("hidden");}
+    function showError(msg) {
+      const el = $("errorBox");
+      if (el) { el.textContent = msg; el.classList.remove("hidden"); }
+      else console.error("showError:", msg);
+    }
+    function hideError() {
+      const el = $("errorBox");
+      if (el) el.classList.add("hidden");
+    }
 
     // Helper: find all period keys and sort newest → oldest
     function extractPeriods(statement) {
@@ -1273,9 +1288,6 @@ function showModule(id) {
   document.addEventListener("DOMContentLoaded", () => {
     loadIndustryMap();
     loadPortfolioCompanies();
-    // Load dashboard on initial page load
-    loadDashboardRecommendations();
-    loadDashboardDeals();
   });
 
   async function loadIndustryMap() {
@@ -1383,25 +1395,45 @@ function showModule(id) {
     }
   }
 
-async function streamAndRenderComps(tickers, title) {
+function fmtPct(v) {
+  if (v == null || isNaN(v)) return "N/A";
+  return (v * 100).toFixed(1) + "%";
+}
+
+async function streamAndRenderComps(tickers, title, source = "industry") {
+  const isPortfolio = source === "portfolio";
+  const endpoint = isPortfolio ? "/api/portfolio-comparison-stream" : "/api/industry-comparison-stream";
+
   openEmptyModal(title);
-  $("modalBody").innerHTML = `<p class="text-gray-600 p-4">Loading ${tickers.length} companies...</p>`;
+  const totalTickers = tickers.length;
+  $("modalBody").innerHTML = `
+    <div class="flex flex-col items-center justify-center gap-4 py-16 min-h-[200px] text-gray-600">
+      <div class="animate-spin rounded-full h-12 w-12 border-2 border-blue-600 border-t-transparent"></div>
+      <p class="text-lg font-semibold text-gray-800">Fetching data for ${totalTickers} companies...</p>
+      <p id="compsStreamProgress" class="text-sm text-gray-500">Connecting to server...</p>
+      <div class="w-64 bg-gray-200 rounded-full h-2.5 overflow-hidden">
+        <div id="compsStreamBar" class="bg-blue-600 h-full transition-all duration-300" style="width: 0%"></div>
+      </div>
+    </div>`;
+  // Force browser to paint loading UI before fetch blocks
+  await new Promise(r => requestAnimationFrame(r));
+  await new Promise(r => requestAnimationFrame(r));
 
   let resp;
   try {
-    resp = await fetch(`${API_URL}/api/industry-comparison-stream`, {
+    resp = await fetch(`${API_URL}${endpoint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tickers }),
     });
   } catch (e) {
-    $("modalBody").innerHTML = `<p class="text-red-600 p-4">Failed to connect: ${e.message}</p>`;
+    $("modalBody").innerHTML = `<p class="text-red-600 p-4">Failed to connect: ${e.message}</p><button onclick="closeModal()" class="mt-2 px-4 py-2 btn-primary text-white rounded-lg">Close</button>`;
     return;
   }
 
   if (!resp.ok) {
     const errText = await resp.text();
-    $("modalBody").innerHTML = `<p class="text-red-600 p-4">Server error (${resp.status}): ${errText.slice(0, 200)}</p>`;
+    $("modalBody").innerHTML = `<p class="text-red-600 p-4">Server error (${resp.status}): ${errText.slice(0, 200)}</p><button onclick="closeModal()" class="mt-2 px-4 py-2 btn-primary text-white rounded-lg">Close</button>`;
     return;
   }
 
@@ -1409,27 +1441,75 @@ async function streamAndRenderComps(tickers, title) {
   const decoder = new TextDecoder();
   let buffer = "";
 
+  const industryHeaders = `
+    <th class="text-left px-4 py-2">Ticker</th>
+    <th class="text-left px-4 py-2">Company</th>
+    <th class="text-right px-4 py-2">Revenue</th>
+    <th class="text-right px-4 py-2">P/E</th>
+    <th class="text-right px-4 py-2">P/S</th>
+    <th class="text-right px-4 py-2">Market Cap</th>`;
+  const portfolioHeaders = `
+    <th class="text-left px-4 py-2">Ticker</th>
+    <th class="text-left px-4 py-2">Company</th>
+    <th class="text-right px-4 py-2">Revenue</th>
+    <th class="text-right px-4 py-2">P/S</th>
+    <th class="text-right px-4 py-2">Market Cap</th>
+    <th class="text-right px-4 py-2">EBITDA</th>
+    <th class="text-right px-4 py-2">EV</th>
+    <th class="text-right px-4 py-2">EV/EBITDA</th>
+    <th class="text-right px-4 py-2">EV/Rev</th>
+    <th class="text-right px-4 py-2">Gross Margin</th>
+    <th class="text-right px-4 py-2">EBITDA Margin</th>`;
+
+  const loadingPlaceholder = (ticker) => {
+    const dataCols = isPortfolio ? 9 : 4;
+    const loadingCells = Array(dataCols).fill('<td class="px-4 py-2 text-right text-gray-400">—</td>').join("");
+    return `<tr data-ticker="${ticker}" class="animate-pulse bg-gray-50/50">
+      <td class="px-4 py-2 text-blue-600 font-medium">${ticker}</td>
+      <td class="px-4 py-2 text-gray-500">Loading...</td>
+      ${loadingCells}
+    </tr>`;
+  };
+
   $("modalBody").innerHTML = `
     <div class="overflow-x-auto">
+      <div class="flex items-center justify-between gap-4 py-3 border-b border-gray-200">
+        <span id="compsLoadingText" class="font-medium text-gray-600">Loading... 0 of ${tickers.length} tickers</span>
+        <div class="w-32 bg-gray-200 rounded-full h-2 overflow-hidden">
+          <div id="compsProgressBar" class="bg-blue-600 h-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+      </div>
       <table id="comparisonTable" class="min-w-full border border-gray-200 text-sm text-gray-800">
         <thead class="bg-gray-100 text-gray-700 font-semibold">
-          <tr>
-            <th class="text-left px-4 py-2">Ticker</th>
-            <th class="text-left px-4 py-2">Company</th>
-            <th class="text-right px-4 py-2">Revenue</th>
-            <th class="text-right px-4 py-2">P/E</th>
-            <th class="text-right px-4 py-2">P/S</th>
-            <th class="text-right px-4 py-2">Market Cap</th>
-          </tr>
+          <tr>${isPortfolio ? portfolioHeaders : industryHeaders}</tr>
         </thead>
         <tbody id="comparisonTableBody"></tbody>
       </table>
+      <div id="compsProgressFooter" class="hidden mt-2 text-center text-gray-500 text-sm"></div>
     </div>
   `;
 
   const tbody = $("comparisonTableBody");
+  const loadingText = document.getElementById("compsLoadingText");
+  const progressBar = document.getElementById("compsProgressBar");
+  const progressFooter = document.getElementById("compsProgressFooter");
+
+  for (const t of tickers) {
+    tbody.insertAdjacentHTML("beforeend", loadingPlaceholder(t));
+  }
+
+  function updateProgress(processed, total) {
+    const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+    if (progressBar) progressBar.style.width = pct + "%";
+    if (loadingText) loadingText.textContent = `Loading... ${processed} of ${total} tickers`;
+    if (progressFooter) {
+      progressFooter.textContent = `${processed} of ${total} tickers loaded`;
+      progressFooter.classList.remove("hidden");
+    }
+  }
   const missing = [];
   const validRows = [];
+  const colCount = isPortfolio ? 11 : 6;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -1447,44 +1527,142 @@ async function streamAndRenderComps(tickers, title) {
         continue;
       }
 
+      if (msg.type === "progress") {
+        const processed = msg.processed ?? (validRows.length + missing.length);
+        const total = msg.total ?? totalTickers;
+        updateProgress(processed, total);
+      }
+
       if (msg.type === "company") {
         const c = msg.data;
         validRows.push(c);
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td class="px-4 py-2 text-blue-600">${c.ticker}</td>
-          <td class="px-4 py-2 text-gray-700">${c.company_name || "—"}</td>
-          <td class="px-4 py-2 text-right">${fmtNum(c.revenue)}</td>
-          <td class="px-4 py-2 text-right">${c.pe?.toFixed(2) ?? "N/A"}</td>
-          <td class="px-4 py-2 text-right">${c.ps?.toFixed(2) ?? "N/A"}</td>
-          <td class="px-4 py-2 text-right">${fmtNum(c.market_cap)}</td>`;
-        tbody.appendChild(tr);
+        updateProgress(validRows.length + missing.length, totalTickers);
+        const row = tbody.querySelector(`tr[data-ticker="${c.ticker}"]`);
+        if (row) {
+          row.className = "";
+          if (isPortfolio) {
+            row.innerHTML = `
+              <td class="px-4 py-2 text-blue-600">${c.ticker}</td>
+              <td class="px-4 py-2 text-gray-700">${c.company_name || "—"}</td>
+              <td class="px-4 py-2 text-right">${fmtNum(c.revenue)}</td>
+              <td class="px-4 py-2 text-right">${c.ps != null ? c.ps.toFixed(2) : "N/A"}</td>
+              <td class="px-4 py-2 text-right">${fmtNum(c.market_cap)}</td>
+              <td class="px-4 py-2 text-right">${fmtNum(c.ebitda)}</td>
+              <td class="px-4 py-2 text-right">${fmtNum(c.ev)}</td>
+              <td class="px-4 py-2 text-right">${c.ev_ebitda != null ? c.ev_ebitda.toFixed(2) : "N/A"}</td>
+              <td class="px-4 py-2 text-right">${c.ev_revenue != null ? c.ev_revenue.toFixed(2) : "N/A"}</td>
+              <td class="px-4 py-2 text-right">${fmtPct(c.gross_margin)}</td>
+              <td class="px-4 py-2 text-right">${fmtPct(c.ebitda_margin)}</td>`;
+          } else {
+            row.innerHTML = `
+              <td class="px-4 py-2 text-blue-600">${c.ticker}</td>
+              <td class="px-4 py-2 text-gray-700">${c.company_name || "—"}</td>
+              <td class="px-4 py-2 text-right">${fmtNum(c.revenue)}</td>
+              <td class="px-4 py-2 text-right">${c.pe?.toFixed(2) ?? "N/A"}</td>
+              <td class="px-4 py-2 text-right">${c.ps?.toFixed(2) ?? "N/A"}</td>
+              <td class="px-4 py-2 text-right">${fmtNum(c.market_cap)}</td>`;
+          }
+        } else {
+          const tr = document.createElement("tr");
+          if (isPortfolio) {
+            tr.innerHTML = `
+              <td class="px-4 py-2 text-blue-600">${c.ticker}</td>
+              <td class="px-4 py-2 text-gray-700">${c.company_name || "—"}</td>
+              <td class="px-4 py-2 text-right">${fmtNum(c.revenue)}</td>
+              <td class="px-4 py-2 text-right">${c.ps != null ? c.ps.toFixed(2) : "N/A"}</td>
+              <td class="px-4 py-2 text-right">${fmtNum(c.market_cap)}</td>
+              <td class="px-4 py-2 text-right">${fmtNum(c.ebitda)}</td>
+              <td class="px-4 py-2 text-right">${fmtNum(c.ev)}</td>
+              <td class="px-4 py-2 text-right">${c.ev_ebitda != null ? c.ev_ebitda.toFixed(2) : "N/A"}</td>
+              <td class="px-4 py-2 text-right">${c.ev_revenue != null ? c.ev_revenue.toFixed(2) : "N/A"}</td>
+              <td class="px-4 py-2 text-right">${fmtPct(c.gross_margin)}</td>
+              <td class="px-4 py-2 text-right">${fmtPct(c.ebitda_margin)}</td>`;
+          } else {
+            tr.innerHTML = `
+              <td class="px-4 py-2 text-blue-600">${c.ticker}</td>
+              <td class="px-4 py-2 text-gray-700">${c.company_name || "—"}</td>
+              <td class="px-4 py-2 text-right">${fmtNum(c.revenue)}</td>
+              <td class="px-4 py-2 text-right">${c.pe?.toFixed(2) ?? "N/A"}</td>
+              <td class="px-4 py-2 text-right">${c.ps?.toFixed(2) ?? "N/A"}</td>
+              <td class="px-4 py-2 text-right">${fmtNum(c.market_cap)}</td>`;
+          }
+          tbody.appendChild(tr);
+        }
       }
 
-      if (msg.type === "skip") missing.push(msg.ticker);
-      if (msg.type === "error" && msg.ticker) missing.push(msg.ticker);
+      if (msg.type === "skip") {
+        missing.push(msg.ticker);
+        updateProgress(validRows.length + missing.length, totalTickers);
+        const row = tbody.querySelector(`tr[data-ticker="${msg.ticker}"]`);
+        if (row) {
+          row.className = "bg-amber-50/50";
+          row.innerHTML = `<td class="px-4 py-2 text-blue-600">${msg.ticker}</td><td colspan="${colCount - 1}" class="px-4 py-2 text-amber-700 text-sm">${msg.reason || "Skipped"}</td>`;
+        }
+      }
+      if (msg.type === "error" && msg.ticker) {
+        missing.push(msg.ticker);
+        updateProgress(validRows.length + missing.length, totalTickers);
+        const row = tbody.querySelector(`tr[data-ticker="${msg.ticker}"]`);
+        if (row) {
+          row.className = "bg-red-50/50";
+          row.innerHTML = `<td class="px-4 py-2 text-blue-600">${msg.ticker}</td><td colspan="${colCount - 1}" class="px-4 py-2 text-red-600 text-sm">${msg.error || "Error"}</td>`;
+        }
+      }
     }
     if (done) break;
   }
 
-  if (validRows.length) {
-    const avg = (key) =>
-      validRows.reduce((a, b) => a + (Number(b[key]) || 0), 0) / validRows.length;
+  if (progressFooter) progressFooter.classList.add("hidden");
+  if (progressBar) progressBar.style.width = "100%";
 
+  if (validRows.length) {
+    // MEDIAN(IF(ISNUMBER(range), range)) - only use valid finite numbers
+    const nums = (key) => validRows.map(r => r[key]).filter(v =>
+      typeof v === "number" && !isNaN(v) && isFinite(v));
+    const mean = (key) => { const n = nums(key); return n.length ? n.reduce((a,b)=>a+b,0)/n.length : null; };
+    const median = (key) => {
+      const n = nums(key).slice().sort((a,b)=>a-b);
+      if (!n.length) return null;
+      const m = Math.floor(n.length/2);
+      return n.length % 2 ? n[m] : (n[m-1]+n[m])/2;
+    };
+    const medianFiltered = (key, minVal, maxVal) => {
+      const n = nums(key).filter(v => v >= minVal && v <= maxVal).sort((a,b)=>a-b);
+      if (!n.length) return null;
+      const m = Math.floor(n.length/2);
+      return n.length % 2 ? n[m] : (n[m-1]+n[m])/2;
+    };
     const tr = document.createElement("tr");
     tr.className = "bg-gray-100 font-semibold border-t";
-    tr.innerHTML = `
-    <td class="px-4 py-2 text-gray-700" colspan="2">Average (${validRows.length})</td>
-    <td class="px-4 py-2 text-right">${fmtNum(avg("revenue"))}</td>
-    <td class="px-4 py-2 text-right">${avg("pe").toFixed(2)}</td>
-    <td class="px-4 py-2 text-right">${avg("ps").toFixed(2)}</td>
-    <td class="px-4 py-2 text-right">${fmtNum(avg("market_cap"))}</td>`;
+    if (isPortfolio) {
+      tr.innerHTML = `
+        <td class="px-4 py-2 text-gray-700" colspan="2">Median (${validRows.length})</td>
+        <td class="px-4 py-2 text-right">${fmtNum(mean("revenue"))}</td>
+        <td class="px-4 py-2 text-right">${median("ps") != null ? median("ps").toFixed(2) : "N/A"}</td>
+        <td class="px-4 py-2 text-right">${fmtNum(mean("market_cap"))}</td>
+        <td class="px-4 py-2 text-right">${fmtNum(mean("ebitda"))}</td>
+        <td class="px-4 py-2 text-right">${fmtNum(mean("ev"))}</td>
+        <td class="px-4 py-2 text-right">${median("ev_ebitda") != null ? median("ev_ebitda").toFixed(2) : "N/A"}</td>
+        <td class="px-4 py-2 text-right">${median("ev_revenue") != null ? median("ev_revenue").toFixed(2) : "N/A"}</td>
+        <td class="px-4 py-2 text-right">${fmtPct(median("gross_margin"))}</td>
+        <td class="px-4 py-2 text-right">${fmtPct(median("ebitda_margin"))}</td>`;
+    } else {
+      const avg = (key) => { const n = nums(key); return n.length ? n.reduce((a,b)=>a+b,0)/n.length : null; };
+      const med = (key) => { const n = nums(key).sort((a,b)=>a-b); return n.length ? (n.length%2 ? n[Math.floor(n.length/2)] : (n[n.length/2-1]+n[n.length/2])/2) : null; };
+      const medPE = medianFiltered("pe", 0, 100);
+      tr.innerHTML = `
+        <td class="px-4 py-2 text-gray-700" colspan="2">Median (${validRows.length})</td>
+        <td class="px-4 py-2 text-right">${fmtNum(avg("revenue"))}</td>
+        <td class="px-4 py-2 text-right">${medPE != null ? medPE.toFixed(2) : "N/A"}</td>
+        <td class="px-4 py-2 text-right">${med("ps") != null ? med("ps").toFixed(2) : "N/A"}</td>
+        <td class="px-4 py-2 text-right">${fmtNum(avg("market_cap"))}</td>`;
+    }
     tbody.appendChild(tr);
   }
 
   if (missing.length) {
     const missHeader = document.createElement("tr");
-    missHeader.innerHTML = `<td colspan="6" class="pt-6 pb-2 font-bold text-gray-700">Tickers with missing data</td>`;
+    missHeader.innerHTML = `<td colspan="${colCount}" class="pt-6 pb-2 font-bold text-gray-700">Tickers with missing data</td>`;
     tbody.appendChild(missHeader);
 
     for (const t of missing) {
@@ -1492,15 +1670,72 @@ async function streamAndRenderComps(tickers, title) {
       tr.className = "text-gray-400 italic";
       tr.innerHTML = `
         <td class="px-4 py-2">${t}</td>
-        <td class="px-4 py-2 text-right" colspan="5">No data available</td>`;
+        <td class="px-4 py-2 text-right" colspan="${colCount - 1}">No data available</td>`;
       tbody.appendChild(tr);
     }
   }
 
   if (validRows.length === 0 && missing.length === 0) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="6" class="px-4 py-6 text-gray-500 text-center">No data received. Check the console for errors.</td>`;
+    tr.innerHTML = `<td colspan="${colCount}" class="px-4 py-6 text-gray-500 text-center">No data received. Check the console for errors.</td>`;
     tbody.appendChild(tr);
+  }
+
+  // Bar chart below table (when we have valid rows)
+  if (validRows.length > 0) {
+    const chartSection = document.createElement("div");
+    chartSection.className = "mt-6 pt-6 border-t border-gray-200";
+    const metricOptions = isPortfolio
+      ? ["revenue", "ps", "market_cap", "ebitda", "ev", "ev_ebitda", "ev_revenue", "gross_margin", "ebitda_margin"]
+      : ["revenue", "pe", "ps", "market_cap"];
+    const metricLabels = isPortfolio
+      ? { revenue: "Revenue", ps: "P/S", market_cap: "Market Cap", ebitda: "EBITDA", ev: "EV", ev_ebitda: "EV/EBITDA", ev_revenue: "EV/Rev", gross_margin: "Gross Margin", ebitda_margin: "EBITDA Margin" }
+      : { revenue: "Revenue", pe: "P/E", ps: "P/S", market_cap: "Market Cap" };
+    const isPct = (k) => k === "gross_margin" || k === "ebitda_margin";
+    const chartSelect = document.createElement("select");
+    chartSelect.className = "mb-4 px-3 py-2 border border-gray-300 rounded-lg text-sm";
+    chartSelect.innerHTML = "<option value=''>Metric to visualize</option>" +
+      metricOptions.map(k => `<option value="${k}">${metricLabels[k] || k}</option>`).join("");
+    chartSelect.value = "revenue";
+    const chartContainer = document.createElement("div");
+    chartContainer.id = "compsChartContainer";
+    chartContainer.className = "flex items-end gap-2 h-48 mt-2";
+    chartSection.appendChild(chartSelect);
+    chartSection.appendChild(chartContainer);
+
+    function renderChart() {
+      const key = chartSelect.value;
+      if (!key) { chartContainer.innerHTML = ""; return; }
+      const values = validRows.map(r => ({ ticker: r.ticker, val: r[key] }));
+      const valid = values.filter(v => v.val != null && typeof v.val === "number" && !isNaN(v.val) && isFinite(v.val));
+      if (!valid.length) { chartContainer.innerHTML = "<p class='text-gray-500 text-sm'>No valid data for this metric</p>"; return; }
+      const max = Math.max(...valid.map(v => v.val));
+      const min = Math.min(...valid.map(v => v.val));
+      const hasNegative = min < 0;
+      const hasPositive = max > 0;
+      const range = hasNegative && hasPositive
+        ? Math.max(max, Math.abs(min))
+        : (max - min || 1);
+      const baseline = hasNegative && hasPositive ? 0 : min;
+      chartContainer.innerHTML = valid.map(({ ticker, val }) => {
+        const barHeight = range > 0 ? (Math.abs(val - baseline) / range) * 100 : 0;
+        const minBarPct = 6;
+        const pct = Math.max(barHeight, minBarPct);
+        const isNeg = val < 0;
+        const barColor = isNeg ? "bg-red-500" : "bg-blue-600";
+        const label = isPct(key) ? fmtPct(val) : fmtNum(val);
+        return `<div class="flex flex-col items-center flex-1 min-w-0">
+          <div class="w-full flex flex-col justify-end bg-gray-100 rounded overflow-hidden" style="height: 120px;">
+            <div class="${barColor} w-full rounded-t transition-all" style="height: ${pct}%; min-height: 6px;"></div>
+          </div>
+          <span class="text-xs font-medium text-gray-700 mt-1 truncate w-full text-center" title="${ticker}">${ticker}</span>
+          <span class="text-xs text-gray-500 truncate w-full text-center" title="${label}">${label}</span>
+        </div>`;
+      }).join("");
+    }
+    chartSelect.onchange = renderChart;
+    renderChart();
+    $("modalBody").appendChild(chartSection);
   }
 }
 
@@ -1522,56 +1757,96 @@ async function fetchIndustryComparison() {
     return;
   }
 
-  await streamAndRenderComps(tickers, "Industry Comparison");
+  await streamAndRenderComps(tickers, "Industry Comparison", "industry");
 }
 
-async function fetchVerticalComps() {
-  const vertical = (document.getElementById("verticalInput")?.value || "").trim();
-  const portfolioId = document.getElementById("portfolioCompanySelect")?.value || "";
-
-  if (vertical && portfolioId) {
-    showError("Please use either vertical or portfolio company, not both.");
-    return;
-  }
-  if (!vertical && !portfolioId) {
-    showError("Please enter a vertical or select a portfolio company.");
-    return;
-  }
-
-  let tickers = [];
-  if (portfolioId) {
-    const res = await fetch(`${API_URL}/api/portfolio-companies/${portfolioId}/tickers`);
-    const json = await res.json();
-    if (!json.success) {
-      showError(json.error || "Failed to load portfolio tickers");
-      return;
-    }
-    tickers = json.data?.tickers || [];
-    if (!tickers.length) {
-      showError("No comps configured for this portfolio company.");
-      return;
-    }
+window.switchCompsMode = function switchCompsMode(mode) {
+  const verticalContainer = document.getElementById("verticalInputContainer");
+  const portfolioContainer = document.getElementById("portfolioCompanyContainer");
+  const verticalInput = document.getElementById("verticalInput");
+  const portfolioSelect = document.getElementById("portfolioCompanySelect");
+  if (!verticalContainer || !portfolioContainer) return;
+  if (mode === "vertical") {
+    verticalContainer.classList.remove("hidden");
+    portfolioContainer.classList.add("hidden");
+    if (portfolioSelect) portfolioSelect.value = "";
   } else {
-    const res = await fetch(`${API_URL}/api/vertical-tickers`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ vertical }),
-    });
-    const json = await res.json();
-    if (!json.success) {
-      showError(json.error || "Failed to find relevant tickers");
-      return;
-    }
-    tickers = json.data?.tickers || [];
-    if (!tickers.length) {
-      showError("No relevant tickers found for this vertical.");
-      return;
-    }
+    verticalContainer.classList.add("hidden");
+    portfolioContainer.classList.remove("hidden");
+    if (verticalInput) verticalInput.value = "";
   }
+};
 
-  const title = portfolioId ? "Portfolio Comps" : `Vertical: ${vertical}`;
-  await streamAndRenderComps(tickers, title);
+function showVerticalCompsError(msg) {
+  const el = document.getElementById("verticalCompsError");
+  if (el) {
+    el.textContent = msg || "";
+    el.classList.toggle("hidden", !msg);
+  } else {
+    console.error("showVerticalCompsError:", msg);
+  }
 }
+
+window.fetchVerticalComps = async function fetchVerticalComps() {
+  showVerticalCompsError("");
+  try {
+    const mode = document.querySelector('input[name="compsMode"]:checked')?.value || "vertical";
+    const vertical = (document.getElementById("verticalInput")?.value || "").trim();
+    const portfolioId = document.getElementById("portfolioCompanySelect")?.value || "";
+
+    if (mode === "vertical") {
+      if (!vertical) {
+        showVerticalCompsError("Please enter a vertical.");
+        return;
+      }
+    } else {
+      if (!portfolioId) {
+        showVerticalCompsError("Please select a portfolio company.");
+        return;
+      }
+    }
+
+    let tickers = [];
+    let companyName = "";
+    if (mode === "portfolio" && portfolioId) {
+      const select = document.getElementById("portfolioCompanySelect");
+      companyName = select?.selectedOptions?.[0]?.textContent || "Portfolio";
+      const res = await fetch(`${API_URL}/api/portfolio-companies/${portfolioId}/tickers`);
+      const json = await res.json();
+      if (!json.success) {
+        showVerticalCompsError(json.error || "Failed to load portfolio tickers");
+        return;
+      }
+      tickers = json.data?.tickers || [];
+      if (!tickers.length) {
+        showVerticalCompsError("No comps configured for this portfolio company.");
+        return;
+      }
+    } else {
+      const res = await fetch(`${API_URL}/api/vertical-tickers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vertical }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        showVerticalCompsError(json.error || "Failed to find relevant tickers");
+        return;
+      }
+      tickers = json.data?.tickers || [];
+      if (!tickers.length) {
+        showVerticalCompsError("No relevant tickers found for this vertical.");
+        return;
+      }
+    }
+
+    const title = (mode === "portfolio" && portfolioId) ? `Portfolio Comps - ${companyName}` : `Vertical: ${vertical}`;
+    await streamAndRenderComps(tickers, title, "portfolio");
+  } catch (e) {
+    console.error("fetchVerticalComps error:", e);
+    showVerticalCompsError("Error: " + (e.message || String(e)));
+  }
+};
 
 
 </script>
@@ -5382,6 +5657,19 @@ function exportProspectingResultsToCSV() {
   // Clean up the URL object
   URL.revokeObjectURL(url);
 }
+
+// Ensure dashboard loads on initial page view (runs after all scripts; DOMContentLoaded may have already fired)
+(function ensureDashboardLoad() {
+  function run() {
+    if (typeof loadDashboardRecommendations === "function") loadDashboardRecommendations();
+    if (typeof loadDashboardDeals === "function") loadDashboardDeals();
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", run);
+  } else {
+    run();
+  }
+})();
 
 </script>
 
