@@ -384,10 +384,15 @@
     </div>
     <div id="portfolioCompanyContainer" class="space-y-4 hidden">
       <label class="block text-sm font-medium text-gray-700 mb-2">Portfolio Company</label>
-      <select id="portfolioCompanySelect"
-        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <option value="">Select portfolio company</option>
-      </select>
+      <div class="relative">
+        <input id="portfolioCompanyInput" type="text"
+          placeholder="Type to search portfolio companies..."
+          autocomplete="off"
+          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <input id="portfolioCompanyId" type="hidden" value="" />
+        <div id="portfolioCompanyDropdown" class="hidden absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        </div>
+      </div>
     </div>
     <button type="button"
             onclick="window.fetchVerticalComps()"
@@ -1305,23 +1310,67 @@ function showModule(id) {
     }
   }
 
+  let portfolioCompaniesList = [];
+  let portfolioCompanySearchInitialized = false;
   async function loadPortfolioCompanies() {
     try {
       const res = await fetch(`${API_URL || ""}/api/portfolio-companies`);
       const json = await res.json();
       if (!json.success || !json.data) return;
-      const select = document.getElementById("portfolioCompanySelect");
-      if (!select) return;
-      select.innerHTML = `<option value="">Select portfolio company</option>`;
-      for (const c of json.data) {
-        const opt = document.createElement("option");
-        opt.value = c.id;
-        opt.textContent = c.company_name || c.id;
-        select.appendChild(opt);
+      portfolioCompaniesList = json.data;
+      if (!portfolioCompanySearchInitialized) {
+        initPortfolioCompanySearch();
+        portfolioCompanySearchInitialized = true;
       }
     } catch (e) {
       console.error("portfolio companies load failed", e);
     }
+  }
+
+  function initPortfolioCompanySearch() {
+    const input = document.getElementById("portfolioCompanyInput");
+    const idInput = document.getElementById("portfolioCompanyId");
+    const dropdown = document.getElementById("portfolioCompanyDropdown");
+    if (!input || !dropdown) return;
+
+    function filterAndShow(query) {
+      const q = (query || "").trim().toLowerCase();
+      let matches = q
+        ? portfolioCompaniesList.filter(c =>
+            (c.company_name || c.id || "").toLowerCase().includes(q))
+        : portfolioCompaniesList;
+      matches = matches.slice(0, 100).sort((a, b) =>
+        (a.company_name || a.id || "").localeCompare(b.company_name || b.id || ""));
+      dropdown.innerHTML = "";
+      if (matches.length === 0) {
+        dropdown.innerHTML = '<div class="px-4 py-3 text-gray-500 text-sm">No matching companies</div>';
+      } else {
+        matches.forEach(c => {
+          const div = document.createElement("div");
+          div.className = "px-4 py-2 hover:bg-blue-50 cursor-pointer text-gray-800";
+          div.textContent = c.company_name || c.id;
+          div.dataset.id = c.id;
+          div.dataset.name = c.company_name || c.id;
+          div.addEventListener("click", () => {
+            input.value = div.dataset.name;
+            if (idInput) idInput.value = div.dataset.id;
+            dropdown.classList.add("hidden");
+            input.blur();
+          });
+          dropdown.appendChild(div);
+        });
+      }
+      dropdown.classList.remove("hidden");
+    }
+
+    input.addEventListener("focus", () => filterAndShow(input.value));
+    input.addEventListener("input", () => {
+      if (!input.value.trim() && idInput) idInput.value = "";
+      filterAndShow(input.value);
+    });
+    input.addEventListener("blur", () => {
+      setTimeout(() => dropdown.classList.add("hidden"), 150);
+    });
   }
 
   function populateIndustryDropdown() {
@@ -1764,12 +1813,16 @@ window.switchCompsMode = function switchCompsMode(mode) {
   const verticalContainer = document.getElementById("verticalInputContainer");
   const portfolioContainer = document.getElementById("portfolioCompanyContainer");
   const verticalInput = document.getElementById("verticalInput");
-  const portfolioSelect = document.getElementById("portfolioCompanySelect");
+  const portfolioInput = document.getElementById("portfolioCompanyInput");
+  const portfolioIdInput = document.getElementById("portfolioCompanyId");
+  const portfolioDropdown = document.getElementById("portfolioCompanyDropdown");
   if (!verticalContainer || !portfolioContainer) return;
   if (mode === "vertical") {
     verticalContainer.classList.remove("hidden");
     portfolioContainer.classList.add("hidden");
-    if (portfolioSelect) portfolioSelect.value = "";
+    if (portfolioInput) portfolioInput.value = "";
+    if (portfolioIdInput) portfolioIdInput.value = "";
+    if (portfolioDropdown) portfolioDropdown.classList.add("hidden");
   } else {
     verticalContainer.classList.add("hidden");
     portfolioContainer.classList.remove("hidden");
@@ -1792,7 +1845,7 @@ window.fetchVerticalComps = async function fetchVerticalComps() {
   try {
     const mode = document.querySelector('input[name="compsMode"]:checked')?.value || "vertical";
     const vertical = (document.getElementById("verticalInput")?.value || "").trim();
-    const portfolioId = document.getElementById("portfolioCompanySelect")?.value || "";
+    const portfolioId = document.getElementById("portfolioCompanyId")?.value || "";
 
     if (mode === "vertical") {
       if (!vertical) {
@@ -1809,8 +1862,7 @@ window.fetchVerticalComps = async function fetchVerticalComps() {
     let tickers = [];
     let companyName = "";
     if (mode === "portfolio" && portfolioId) {
-      const select = document.getElementById("portfolioCompanySelect");
-      companyName = select?.selectedOptions?.[0]?.textContent || "Portfolio";
+      companyName = document.getElementById("portfolioCompanyInput")?.value?.trim() || "Portfolio";
       const res = await fetch(`${API_URL}/api/portfolio-companies/${portfolioId}/tickers`);
       const json = await res.json();
       if (!json.success) {
