@@ -84,6 +84,40 @@ FOUNDERS_API_BASE = os.getenv("FOUNDERS_API_URL", "https://monty-api-production.
 FOUNDERS_API_KEY = os.getenv("FOUNDERS_API_KEY", "5f8e7ac4f6f8a3b6b2d91c66e01d0f7d1a91f4f4bfc1f3263e57b85c14f6a733")
 
 
+@app.route("/api/founders-proxy/debug", methods=["GET"])
+def founders_proxy_debug():
+    """Diagnostic endpoint: test connectivity to Founders API and surface upstream response."""
+    url = f"{FOUNDERS_API_BASE.rstrip('/')}/recommended-founders"
+    try:
+        resp = requests.get(
+            url,
+            headers={"x-api-key": FOUNDERS_API_KEY},
+            timeout=30,
+        )
+        body_snippet = resp.text[:500] if resp.text else "(empty)"
+        try:
+            parsed = resp.json()
+            body_preview = json.dumps(parsed)[:500] if parsed else body_snippet
+        except (ValueError, json.JSONDecodeError):
+            body_preview = body_snippet
+        return jsonify({
+            "upstream_url": url,
+            "upstream_status": resp.status_code,
+            "body_preview": body_preview,
+            "ok": resp.ok,
+        })
+    except requests.RequestException as e:
+        print(traceback.format_exc())
+        return jsonify({
+            "upstream_url": url,
+            "error": str(e),
+            "error_type": type(e).__name__,
+        }), 502
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"error": str(e), "error_type": type(e).__name__}), 500
+
+
 @app.route("/api/founders-proxy/<path:path>", methods=["GET"])
 def founders_proxy(path: str):
     """Proxy requests to the external Founders API to avoid CORS."""

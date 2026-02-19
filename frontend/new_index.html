@@ -2372,6 +2372,9 @@ async function loadFounders(endpoint) {
       }
     });
     const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json.error || json.detail || `${res.status} ${res.statusText}`);
+    }
     const data = sortFoundersByAccessDateDesc(json.data || []);
 
     $("foundersLoading").classList.add("hidden");
@@ -2404,7 +2407,7 @@ async function loadFounders(endpoint) {
   } catch (err) {
     $("foundersLoading").classList.add("hidden");
     console.error(err);
-    $("foundersScroll").innerHTML = `<p class="text-red-500 px-4">Error loading data.</p>`;
+    $("foundersScroll").innerHTML = `<p class="text-red-500 px-4">Error loading data: ${err.message}</p>`;
   }
 }
 function clean(value) {
@@ -2660,17 +2663,15 @@ async function searchFounders() {
       headers: { "x-api-key": API_KEY }
     });
     
-    // Check response status before parsing JSON
+    const json = await res.json().catch(() => null);
     if (!res.ok) {
-      const errorText = await res.text();
-      console.error("API Error Response:", res.status, res.statusText, errorText);
-      throw new Error(`Search failed: ${res.status} ${res.statusText}`);
+      const errMsg = (json && (json.error || json.detail)) || `${res.status} ${res.statusText}`;
+      console.error("API Error Response:", res.status, res.statusText, errMsg);
+      throw new Error(`Search failed: ${errMsg}`);
     }
-    
-    const json = await res.json().catch(err => {
-      console.error("Failed to parse JSON response:", err);
+    if (!json) {
       throw new Error("Invalid response from server");
-    });
+    }
     
     const data = sortFoundersByAccessDateDesc(json.data || []);
 
@@ -2711,7 +2712,7 @@ async function searchFounders() {
     // Ensure recommended results are hidden even on error
     $("recommendedResults").classList.add("hidden");
     $("searchResults").classList.remove("hidden");
-    $("searchScroll").innerHTML = `<p class="text-red-500 px-4">Search failed.</p>`;
+    $("searchScroll").innerHTML = `<p class="text-red-500 px-4">Search failed: ${err.message}</p>`;
   }
 }
 
@@ -2806,6 +2807,10 @@ async function loadFilters() {
       headers: { "x-api-key": API_KEY }
     });
     const json = await res.json();
+    if (!res.ok) {
+      console.error("Filters API error:", json.error || json.detail || res.statusText);
+      return;
+    }
     const locations = json.locations || [];
     const treePaths = json.tree_paths || [];
 
@@ -3449,6 +3454,9 @@ async function loadRecommendedFiltered() {
       headers: { "x-api-key": API_KEY }
     });
     const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json.error || json.detail || `${res.status} ${res.statusText}`);
+    }
     const data = sortFoundersByAccessDateDesc(json.data || []);
 
     $("foundersLoading").classList.add("hidden");
@@ -3482,7 +3490,7 @@ async function loadRecommendedFiltered() {
   } catch (err) {
     console.error(err);
     $("foundersLoading").classList.add("hidden");
-    $("recommendedScroll").innerHTML = `<p class="text-red-500 px-4">Error loading data.</p>`;
+    $("recommendedScroll").innerHTML = `<p class="text-red-500 px-4">Error loading data: ${err.message}</p>`;
   }
 }
 
@@ -3501,6 +3509,9 @@ async function loadDashboardRecommendations() {
       headers: { "x-api-key": API_KEY }
     });
     const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json.error || json.detail || `${res.status} ${res.statusText}`);
+    }
     const sortedData = sortFoundersByAccessDateDesc(json.data || []);
     const data = dedupeFoundersByCompany(sortedData);
 
@@ -3544,7 +3555,7 @@ async function loadDashboardRecommendations() {
   } catch (err) {
     console.error("Failed to load dashboard recommendations", err);
     loadingEl.classList.add("hidden");
-    listEl.innerHTML = `<p class="text-red-500 text-sm text-center py-4">Error loading recommendations.</p>`;
+    listEl.innerHTML = `<p class="text-red-500 text-sm text-center py-4">Error loading recommendations: ${err.message}</p>`;
   }
 }
 
