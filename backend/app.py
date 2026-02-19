@@ -96,14 +96,18 @@ def founders_proxy(path: str):
             headers={"x-api-key": FOUNDERS_API_KEY},
             timeout=30,
         )
-        return Response(
-            resp.content,
-            status=resp.status_code,
-            mimetype="application/json",
-        )
+        # Ensure we always return valid JSON (upstream may return HTML on 4xx/5xx)
+        try:
+            data = resp.json()
+        except (ValueError, json.JSONDecodeError):
+            data = {"success": False, "error": resp.text[:200] or f"Upstream returned {resp.status_code}", "data": []}
+        return jsonify(data), resp.status_code
     except requests.RequestException as e:
         print(traceback.format_exc())
-        return jsonify({"success": False, "error": str(e)}), 502
+        return jsonify({"success": False, "error": str(e), "data": []}), 502
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e), "data": []}), 500
 
 # ---------------------------------------------------------------------
 # Basic numbers ENDPOINT
