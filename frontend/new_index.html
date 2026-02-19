@@ -1905,7 +1905,8 @@ window.fetchVerticalComps = async function fetchVerticalComps() {
 <script>
   const API_KEY = "5f8e7ac4f6f8a3b6b2d91c66e01d0f7d1a91f4f4bfc1f3263e57b85c14f6a733";
 
-const FOUNDERS_API = "https://monty-api-production.up.railway.app";
+// Use same-origin proxy to avoid CORS (backend proxies to monty-api-production)
+const FOUNDERS_API = "/api/founders-proxy";
 const CONTACT_STATUS_ENDPOINT = "/api/founders/contact-status";
 const contactStatusCache = new Map();
 

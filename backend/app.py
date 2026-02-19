@@ -3,6 +3,7 @@ import json
 import traceback
 import re
 import logging
+import requests
 from flask import jsonify
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, send_file, Response, stream_with_context
@@ -75,6 +76,34 @@ def health():
 @app.route("/", methods=["GET"])
 def index():
     return send_file(os.path.join(FRONTEND_DIR, "new_index.html"))
+
+# ---------------------------------------------------------------------
+# FOUNDERS API PROXY (avoids CORS by proxying external Founders API)
+# ---------------------------------------------------------------------
+FOUNDERS_API_BASE = os.getenv("FOUNDERS_API_URL", "https://monty-api-production.up.railway.app")
+FOUNDERS_API_KEY = os.getenv("FOUNDERS_API_KEY", "5f8e7ac4f6f8a3b6b2d91c66e01d0f7d1a91f4f4bfc1f3263e57b85c14f6a733")
+
+
+@app.route("/api/founders-proxy/<path:path>", methods=["GET"])
+def founders_proxy(path: str):
+    """Proxy requests to the external Founders API to avoid CORS."""
+    url = f"{FOUNDERS_API_BASE.rstrip('/')}/{path}"
+    if request.query_string:
+        url = f"{url}?{request.query_string.decode()}"
+    try:
+        resp = requests.get(
+            url,
+            headers={"x-api-key": FOUNDERS_API_KEY},
+            timeout=30,
+        )
+        return Response(
+            resp.content,
+            status=resp.status_code,
+            mimetype="application/json",
+        )
+    except requests.RequestException as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 502
 
 # ---------------------------------------------------------------------
 # Basic numbers ENDPOINT
