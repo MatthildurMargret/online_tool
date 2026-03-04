@@ -247,6 +247,11 @@
             onclick="showModule('prospectingModule')">
       Prospecting
     </button>
+    <button id="btn-verticalSearchModule"
+            class="sidebar-btn text-left py-3 px-4 rounded"
+            onclick="showModule('verticalSearchModule')">
+      Vertical Search
+    </button>
     <button id="btn-valuationModule"
             class="sidebar-btn text-left py-3 px-4 rounded"
             onclick="showModule('valuationModule')">
@@ -896,6 +901,45 @@
       </div>
     </div>
 
+    <!-- Vertical Search Module -->
+    <div id="verticalSearchModule" class="hidden">
+      <div class="module-card rounded-xl w-full p-6 space-y-6">
+        <h2 class="text-2xl font-bold text-brand">Vertical Search</h2>
+        <p class="text-gray-600">Use this to go deep on a specific theme — e.g. <em>"agentic commerce"</em> or <em>"AI for drug discovery"</em>. When you run a search, we pull matches from the web via Exa and from our internal founders database. Results are not saved — run again anytime to refresh.</p>
+
+        <!-- Add search form -->
+        <div class="bg-gray-50 rounded-lg p-4 space-y-3 border border-gray-200">
+          <h3 class="font-semibold text-gray-800">Add a new search</h3>
+          <div class="flex gap-3 flex-wrap items-end">
+            <div class="flex flex-col gap-1">
+              <label class="text-sm text-gray-600 font-medium">Investor</label>
+              <select id="vsUserSelect" class="border border-gray-300 rounded px-3 py-2 text-sm bg-white min-w-[140px]">
+                <option value="">Select investor…</option>
+              </select>
+            </div>
+            <div class="flex flex-col gap-1 flex-1" style="min-width:240px">
+              <label class="text-sm text-gray-600 font-medium">Search query</label>
+              <input id="vsQueryInput" type="text" placeholder="e.g. AI for mathematical reasoning"
+                class="border border-gray-300 rounded px-3 py-2 text-sm w-full" />
+            </div>
+            <button onclick="addVerticalSearch()"
+              class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium whitespace-nowrap">
+              Add Search
+            </button>
+          </div>
+          <p id="vsAddError" class="text-red-600 text-sm hidden"></p>
+        </div>
+
+        <!-- Saved searches list -->
+        <div>
+          <h3 class="font-semibold text-gray-800 mb-3">Saved searches</h3>
+          <div id="vsSearchesList" class="space-y-4">
+            <p class="text-gray-500 text-sm">Loading…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Deals Module -->
     <div id="dealsModule" class="hidden">
       <div class="module-card rounded-xl w-full p-6 space-y-4">
@@ -1015,7 +1059,7 @@ function closeSidebarMobile() {
 }
 
 function showModule(id) {
-  ["welcomeModule", "valuationModule", "foundersModule", "dealsModule", "interestingPeopleModule", "tasteTreeModule", "prospectingModule"].forEach(m =>
+  ["welcomeModule", "valuationModule", "foundersModule", "dealsModule", "interestingPeopleModule", "tasteTreeModule", "prospectingModule", "verticalSearchModule"].forEach(m =>
     document.getElementById(m).classList.add("hidden")
   );
   document.getElementById(id).classList.remove("hidden");
@@ -1055,6 +1099,11 @@ function showModule(id) {
 
   if (id === "valuationModule" && typeof loadPortfolioCompanies === "function") {
     loadPortfolioCompanies();
+  }
+
+  if (id === "verticalSearchModule") {
+    loadVerticalSearchUsers();
+    loadVerticalSearches();
   }
 
   // Ensure modal is closed when switching modules (prevents overlay blocking interaction)
@@ -5734,6 +5783,194 @@ function exportProspectingResultsToCSV() {
     run();
   }
 })();
+
+// =====================================================================
+// VERTICAL SEARCH
+// =====================================================================
+
+async function loadVerticalSearchUsers() {
+  try {
+    const res = await fetch("/api/taste-tree/users");
+    const json = await res.json();
+    const select = document.getElementById("vsUserSelect");
+    const current = select.value;
+    select.innerHTML = '<option value="">Select investor…</option>';
+    (json.data || []).forEach(u => {
+      const opt = document.createElement("option");
+      opt.value = u;
+      opt.textContent = u;
+      if (u === current) opt.selected = true;
+      select.appendChild(opt);
+    });
+  } catch (e) {
+    console.error("Failed to load users for vertical search", e);
+  }
+}
+
+async function loadVerticalSearches() {
+  const container = document.getElementById("vsSearchesList");
+  container.innerHTML = '<p class="text-gray-500 text-sm">Loading…</p>';
+  try {
+    const res = await fetch("/api/targeted-searches");
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error);
+    const searches = json.data || [];
+    if (searches.length === 0) {
+      container.innerHTML = '<p class="text-gray-500 text-sm">No saved searches yet.</p>';
+      return;
+    }
+    container.innerHTML = "";
+    searches.forEach(s => {
+      const card = document.createElement("div");
+      card.id = `vs-card-${s.id}`;
+      card.className = "border border-gray-200 rounded-lg p-4 bg-white space-y-3";
+      card.innerHTML = `
+        <div class="flex items-start justify-between gap-3 flex-wrap">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded">${escapeHtml(s.user_name)}</span>
+            <span class="text-gray-800 font-medium">${escapeHtml(s.query)}</span>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="runVerticalSearch('${s.id}', this)"
+              class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 font-medium">
+              Run
+            </button>
+            <button onclick="deleteVerticalSearch('${s.id}')"
+              class="px-3 py-1.5 bg-red-100 text-red-700 rounded text-sm hover:bg-red-200 font-medium">
+              Delete
+            </button>
+          </div>
+        </div>
+        <div id="vs-results-${s.id}" class="hidden space-y-4"></div>
+      `;
+      container.appendChild(card);
+    });
+  } catch (e) {
+    container.innerHTML = `<p class="text-red-600 text-sm">Error loading searches: ${e.message}</p>`;
+  }
+}
+
+async function addVerticalSearch() {
+  const user = document.getElementById("vsUserSelect").value.trim();
+  const query = document.getElementById("vsQueryInput").value.trim();
+  const errEl = document.getElementById("vsAddError");
+  errEl.classList.add("hidden");
+  if (!user || !query) {
+    errEl.textContent = "Please select an investor and enter a query.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  try {
+    const res = await fetch("/api/targeted-searches", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({user_name: user, query}),
+    });
+    const json = await res.json();
+    if (!json.success) {
+      errEl.textContent = json.error || "Failed to add search.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    document.getElementById("vsQueryInput").value = "";
+    loadVerticalSearches();
+  } catch (e) {
+    errEl.textContent = "Network error: " + e.message;
+    errEl.classList.remove("hidden");
+  }
+}
+
+async function deleteVerticalSearch(id) {
+  if (!confirm("Delete this search?")) return;
+  try {
+    const res = await fetch(`/api/targeted-searches/${id}`, {method: "DELETE"});
+    const json = await res.json();
+    if (json.success) {
+      loadVerticalSearches();
+    }
+  } catch (e) {
+    console.error("Delete failed", e);
+  }
+}
+
+async function runVerticalSearch(id, btn) {
+  const resultsDiv = document.getElementById(`vs-results-${id}`);
+  resultsDiv.classList.remove("hidden");
+  resultsDiv.innerHTML = `
+    <div class="flex items-center gap-2 text-sm text-gray-600">
+      <div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+      Searching…
+    </div>`;
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch(`/api/targeted-searches/${id}/run`, {method: "POST"});
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error);
+
+    let html = "";
+
+    // Exa results
+    html += `<div>
+      <h4 class="font-semibold text-gray-800 mb-2">Found online</h4>`;
+    if (!json.exa || json.exa.length === 0) {
+      html += '<p class="text-gray-500 text-sm">No external matches found.</p>';
+    } else {
+      html += '<div class="space-y-2">';
+      json.exa.forEach(r => {
+        const highlights = Array.isArray(r.highlights) ? r.highlights : [];
+        const snippet = highlights.length > 0 ? highlights[0] : "";
+        html += `
+          <div class="bg-gray-50 rounded p-3 border border-gray-100">
+            <a href="${escapeHtml(r.url)}" target="_blank" class="font-medium text-blue-700 hover:underline">${escapeHtml(r.title || r.url)}</a>
+            ${snippet ? (() => { const s = typeof snippet === "string" ? snippet : JSON.stringify(snippet); const cut = s.indexOf("Total Experience:"); return cut > -1 ? `<p class="text-sm text-gray-600 mt-1">${escapeHtml(s.slice(0, cut).trim())}</p>` : ""; })() : ""}
+          </div>`;
+      });
+      html += "</div>";
+    }
+    html += "</div>";
+
+    // Internal results
+    html += `<div>
+      <h4 class="font-semibold text-gray-800 mb-2">In our database</h4>`;
+    if (!json.internal || json.internal.length === 0) {
+      html += '<p class="text-gray-500 text-sm">No internal matches found.</p>';
+    } else {
+      html += '<div class="space-y-2">';
+      json.internal.forEach(f => {
+        const linkedIn = f.profile_url
+          ? `<a href="${escapeHtml(f.profile_url)}" target="_blank" class="text-blue-600 hover:underline text-sm">LinkedIn</a>`
+          : "";
+        html += `
+          <div class="bg-gray-50 rounded p-3 border border-gray-100">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-medium text-gray-900">${escapeHtml(f.name || "")}</span>
+              ${f.company_name ? `<span class="text-gray-500 text-sm">· ${escapeHtml(f.company_name)}</span>` : ""}
+              ${linkedIn}
+            </div>
+            ${f.tree_path ? `<p class="text-xs text-blue-600 mt-1">${escapeHtml(f.tree_path)}</p>` : ""}
+            ${f.product ? `<p class="text-sm text-gray-600 mt-1">${escapeHtml(f.product)}</p>` : ""}
+          </div>`;
+      });
+      html += "</div>";
+    }
+    html += "</div>";
+
+    resultsDiv.innerHTML = html;
+  } catch (e) {
+    resultsDiv.innerHTML = `<p class="text-red-600 text-sm">Error: ${e.message}</p>`;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 </script>
 

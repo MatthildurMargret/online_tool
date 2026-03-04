@@ -1105,3 +1105,45 @@ def batch_update_user_tags(user_name: str, add_paths: List[List[str]], remove_pa
         import traceback
         traceback.print_exc()
         return False
+
+
+# ---------------------------------------------------------------------
+# TARGETED SEARCHES
+# ---------------------------------------------------------------------
+
+def get_targeted_searches(user_name: Optional[str] = None) -> List[Dict]:
+    """Get all targeted searches, optionally filtered by user_name."""
+    if not supabase:
+        raise Exception("Supabase client not initialized.")
+    try:
+        query = supabase.table("targeted_searches").select("*").order("created_at")
+        if user_name:
+            query = query.eq("user_name", user_name)
+        result = query.execute()
+        return result.data or []
+    except Exception as e:
+        print(f"Error getting targeted searches: {e}")
+        return []
+
+
+def add_targeted_search(user_name: str, query: str) -> Dict:
+    """Add a targeted search for a user. Raises ValueError if user already has 3."""
+    if not supabase:
+        raise Exception("Supabase client not initialized.")
+    result = supabase.table("targeted_searches").insert({
+        "user_name": user_name,
+        "query": query,
+    }).execute()
+    return result.data[0] if result.data else {}
+
+
+def delete_targeted_search(search_id: str) -> bool:
+    """Delete a targeted search by id."""
+    if not supabase:
+        raise Exception("Supabase client not initialized.")
+    try:
+        supabase.table("targeted_searches").delete().eq("id", search_id).execute()
+        return True
+    except Exception as e:
+        print(f"Error deleting targeted search {search_id}: {e}")
+        return False

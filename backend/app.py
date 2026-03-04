@@ -37,6 +37,9 @@ from supabase_db import (
     get_gemini_financials_batch,
     is_gemini_financials_fresh,
     upsert_gemini_financials,
+    get_targeted_searches,
+    add_targeted_search,
+    delete_targeted_search,
 )
 from utils.stock_price import get_price_with_cache
 from utils.formatting import clean_nans
@@ -768,6 +771,177 @@ def search_prospects():
     except ValueError as e:
         # Missing API keys
         return jsonify({"success": False, "error": str(e)}), 400
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------
+# VERTICAL SEARCH (TARGETED SEARCHES) ENDPOINTS
+# ---------------------------------------------------------------------
+
+@app.route("/api/targeted-searches", methods=["GET"])
+def list_targeted_searches():
+    user = request.args.get("user")
+    try:
+        searches = get_targeted_searches(user_name=user)
+        return jsonify({"success": True, "data": searches})
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/targeted-searches", methods=["POST"])
+def create_targeted_search():
+    payload = request.get_json(force=True) or {}
+    user_name = (payload.get("user_name") or "").strip()
+    query = (payload.get("query") or "").strip()
+    if not user_name or not query:
+        return jsonify({"success": False, "error": "user_name and query are required"}), 400
+    try:
+        record = add_targeted_search(user_name, query)
+        return jsonify({"success": True, "data": record}), 201
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/targeted-searches/<search_id>", methods=["DELETE"])
+def remove_targeted_search(search_id):
+    try:
+        ok = delete_targeted_search(search_id)
+        return jsonify({"success": ok})
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/targeted-searches/<search_id>/run", methods=["POST"])
+def run_targeted_search(search_id):
+    import openai as _openai
+
+    try:
+        # Load the search record
+        records = get_targeted_searches()
+        record = next((r for r in records if r["id"] == search_id), None)
+        if not record:
+            return jsonify({"success": False, "error": "Search not found"}), 404
+
+        query_text = record["query"]
+
+        # --- Exa external search ---
+        from services.exa_search import search_people
+        try:
+            exa_results = search_people(query_text)
+        except Exception as exa_err:
+            print(f"Exa search error: {exa_err}")
+            exa_results = []
+
+        # --- Internal search: keyword match against founders table ---
+        internal_results = []
+        database_url = os.getenv("DATABASE_URL")
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if database_url and openai_key:
+            try:
+                import psycopg2
+                client = _openai.OpenAI(api_key=openai_key)
+
+                # Extract specific multi-word keyphrases (avoid single generic words)
+                kw_response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{
+                        "role": "user",
+                        "content": (
+                            f"Extract 5 to 8 specific multi-word keyphrases (2-4 words each) that describe the "
+                            f"core technology or domain of startups in this theme: \"{query_text}\". "
+                            f"Avoid generic single words like 'AI' or 'software'. "
+                            f"Return only a comma-separated list, no explanation."
+                        )
+                    }],
+                    max_tokens=100,
+                    temperature=0,
+                )
+                raw_kw = kw_response.choices[0].message.content or ""
+                keywords = [k.strip().lower() for k in raw_kw.split(",") if k.strip()]
+                print(f"[vertical search] query='{query_text}' keywords={keywords}")
+
+                # Build ILIKE conditions across key text fields
+                conditions = []
+                params = []
+                for kw in keywords:
+                    pattern = f"%{kw}%"
+                    conditions.append(
+                        "(LOWER(name) LIKE %s OR LOWER(company_name) LIKE %s "
+                        "OR LOWER(product) LIKE %s OR LOWER(tree_path) LIKE %s)"
+                    )
+                    params.extend([pattern, pattern, pattern, pattern])
+
+                where_clause = " OR ".join(conditions)
+                sql = f"""
+                    SELECT name, company_name, profile_url, product, tree_path
+                    FROM founders
+                    WHERE founder = true AND ({where_clause})
+                    LIMIT 100
+                """
+                conn = psycopg2.connect(database_url)
+                cur = conn.cursor()
+                cur.execute(sql, params)
+                rows = cur.fetchall()
+                cur.close()
+                conn.close()
+                print(f"[vertical search] SQL returned {len(rows)} rows")
+
+                if rows:
+                    # LLM reranking: ask model to pick the top 5 most relevant
+                    candidates = []
+                    for i, (name, company_name, profile_url, product, tree_path) in enumerate(rows):
+                        candidates.append({
+                            "idx": i,
+                            "name": name or "",
+                            "company_name": company_name or "",
+                            "profile_url": profile_url or "",
+                            "product": product or "",
+                            "tree_path": tree_path or "",
+                        })
+
+                    candidate_text = "\n".join(
+                        f"{c['idx']}: {c['name']} | {c['company_name']} | {c['tree_path']} | {c['product'][:200]}"
+                        for c in candidates
+                    )
+                    rerank_response = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[{
+                            "role": "user",
+                            "content": (
+                                f"Theme: \"{query_text}\"\n\n"
+                                f"Below is a list of founders with their company, category path, and product description. "
+                                f"Return the indices of the 5 most relevant founders to this theme, "
+                                f"as a comma-separated list of numbers only. If fewer than 5 are genuinely relevant, return only those.\n\n"
+                                f"{candidate_text}"
+                            )
+                        }],
+                        max_tokens=50,
+                        temperature=0,
+                    )
+                    raw_indices = rerank_response.choices[0].message.content or ""
+                    selected_indices = []
+                    for part in raw_indices.split(","):
+                        try:
+                            selected_indices.append(int(part.strip()))
+                        except ValueError:
+                            continue
+
+                    print(f"[vertical search] reranker selected indices={selected_indices}")
+                    internal_results = [candidates[i] for i in selected_indices if i < len(candidates)]
+
+            except Exception as internal_err:
+                print(f"Internal search error: {internal_err}")
+                print(traceback.format_exc())
+
+        return jsonify({"success": True, "exa": exa_results, "internal": internal_results})
+
     except Exception as e:
         print(traceback.format_exc())
         return jsonify({"success": False, "error": str(e)}), 500
